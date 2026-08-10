@@ -33,8 +33,8 @@ These counts must be derived from source, not copied by memory.
 
 | Item | Current Count | Source of Truth |
 |---|---:|---|
-| Runtime MCP tools | 168 | `registerRevitTools()` from `MCP-Server/src/tools/index.ts` |
-| Domain SOP files | 72 | `domain/*.md` except `domain/README.md`, plus `domain/references/*.md` |
+| Runtime MCP tools | 169 | `registerRevitTools()` from `MCP-Server/src/tools/index.ts` |
+| Domain SOP files | 75 | `domain/*.md` except `domain/README.md`, plus `domain/references/*.md` |
 | Claude skills | 50 | `.claude/skills/*/SKILL.md` |
 
 When these numbers change, update `CLAUDE.md`, `README.md`, `README.zh-TW.md`, `docs/DOCUMENT_AUDIENCE_INVENTORY.md`, and any public site copy that makes grand-total claims. Then run `scripts/verify-qaqc.ps1 -SkipBuild -SkipDeploy`.
@@ -68,11 +68,14 @@ If the Revit MCP tools are unavailable, state that limitation and provide generi
 
 ## Single-Connection Limitation
 
-The Revit-side WebSocket service (`MCP/Core/SocketService.cs`) holds one MCP connection at a time. A newly connected MCP server replaces the previous connection. Consequences:
+The Revit-side WebSocket service (`MCP/Core/SocketService.cs`) holds an exclusive lock: while one MCP client is connected, additional incoming connections are rejected with HTTP 409 before the WebSocket upgrade (no more clobbering the active connection). Consequences:
 
-- Multiple AI clients are used by switching, never concurrently.
+- Multiple AI clients are used by switching, never concurrently — a second client is cleanly refused, not swapped in.
 - Do not advise users to run two MCP-connected AI clients against the same Revit session.
-- If a connection misbehaves, the reset path is: restart the MCP service from the Revit ribbon.
+- To hand the connection to another client, use the "切換/釋放連線" (Switch/Release Connection) ribbon button — it releases the current connection so the next reconnecting client can take the lock. Because WebSocket connections are anonymous at the transport level, the switch accepts whoever reconnects first, not a guaranteed named target.
+- The "MCP 設定" dialog shows which client currently holds the lock (e.g. `claude-code`, `claude-ai`), sourced from the MCP `clientInfo.name` the Node server forwards as a `?client=` query parameter; older or anonymous clients fall back to endpoint or "unknown".
+- `ServiceSettings.ExclusiveLock` (default `true`) is the escape hatch that reverts to the legacy clobber behavior if disabled.
+- If a connection misbehaves, the reset path is: use the ribbon's switch/release button, or restart the MCP service from the Revit ribbon.
 
 ## Personal Vault Protection
 
@@ -87,6 +90,8 @@ A `vault/` directory at the repo root, if present, is a user's personal knowledg
 Build via the `/build-revit` skill. Full commands (MCP Server npm build; `dotnet build -c Release.R{22,23,24,25,26} RevitMCP.csproj`) are in README.md's Build section.
 
 Expected output path stays `MCP/bin/Release.R{YY}/RevitMCP.dll`. Do not rely on old `bin/Release/RevitMCP.dll` instructions.
+
+`MCP-Server`'s `npm run build` now runs `tsc && node scripts/build-apps.mjs`: `tsc` compiles the server as before, then `scripts/build-apps.mjs` (esbuild) bundles each MCP App under `MCP-Server/src/apps/*/app.ts` into a single self-contained `MCP-Server/build/apps/*/index.html` (e.g. `build/apps/clash-viewer/index.html`). Both steps must succeed for the server to advertise working `ui://` resources.
 
 Deploy with `scripts/install-addon.ps1` or the `/deploy-addon` skill.
 
@@ -112,6 +117,10 @@ If pulling the 2026-07-17 cleanup commit fails with "local changes would be over
 | `MCP-Server/src/socket.ts` | WebSocket client to Revit |
 | `MCP-Server/src/tools/index.ts` | Tool module registry and `MCP_PROFILE` filtering |
 | `MCP-Server/src/tools/revit-tools.ts` | Execution bridge from tool name to Revit command |
+| `MCP-Server/src/tools/annotations.ts` | Central `title` + `readOnlyHint`/`destructiveHint` injection for every registered tool (MCP 2026-07-28 metadata layer) |
+| `MCP-Server/src/apps/register-apps.ts` | MCP Apps (`io.modelcontextprotocol/ui`) resource wiring: `listAppResources` / `readAppResource` / `withAppUi` |
+| `MCP-Server/src/apps/clash-viewer/` | The first MCP App: `app.ts` (ext-apps client) + `template.html`, bundled by `scripts/build-apps.mjs` into a self-contained `ui://clash-viewer/index.html` served for `detect_clashes` |
+| `MCP-Server/scripts/build-apps.mjs` | esbuild single-file bundler that produces `MCP-Server/build/apps/*/index.html` for each MCP App |
 | `bridge/python/skills/ezdxf_worker.py` | Optional Python subprocess (spawned by `DwgColumnExecutor`) that reads DXF/DWG text for column-number mapping (`dwg-column-import` mode C). Needs system Python + `ezdxf`; DWG additionally needs ODA File Converter. Deployed to `%APPDATA%\RevitMCP` by `install-addon.ps1`. |
 | `bridge/python/skills/ezdxf_floor_worker.py` | Optional Python subprocess for semi-automatic floor modeling: extracts closed polylines (mm vertices, bulge arcs flattened, shoelace-area noise filter, `possible_opening` markers) from a DXF/DWG layer as JSON for AI-driven `create_floor` calls. Same Python/ODA requirements and deployment as `ezdxf_worker.py`. |
 | `scripts/verify-qaqc.ps1` | Repository QA/QC gate |
@@ -286,6 +295,7 @@ Read the matching file before applying a workflow or calculation.
 | local update, 本機更新, pull 後部署, 重新編譯部署, 環境專屬部署 | `domain/local-update-workflow.md` |
 | wall orientation, wall check | `domain/wall-check.md` |
 | finish schedule, 粉刷明細, material code governance, 材料代碼 | `domain/finish-schedule-governance.md` |
+| room finish parameter, 房間粉刷參數, shared parameters, 共用參數綁定, room finish schedule, 房間粉刷明細表, BatchAddRoomParams, CreateJJPRoomSchedule | `domain/room-finish-parameter-schedule.md` |
 | beam top alignment, 樑頂貼齊, slab soffit, 樓板底 | `domain/beam-slab-alignment.md` |
 | IFC structural native, IFC 原生結構, beam column sync, 梁柱同步 | `domain/ifc-structural-native-sync.md` |
 | quantity takeoff excel, 數量計算, excel export, 數量表 | `domain/quantity-takeoff-excel.md` |
@@ -296,6 +306,8 @@ Read the matching file before applying a workflow or calculation.
 | threshold opening, 門檻開口, 門窗統計, door count, window count, get_room_door_counts, get_room_window_counts | `domain/threshold-opening-takeoff.md` |
 | RC filled region, RC 填充區域, 批次填充, batch fill region, batch_create_rc_filled_region, create_rc_filled_region | `domain/rc-filled-region-workflow.md` |
 | curtain wall elevation, 帷幕立面, 帷幕外立面, curtain elevation, create_curtain_wall_elevations | `domain/curtain-wall-elevation-workflow.md` |
+| opening candidate, 開孔候選, opening scan, 開孔預掃, scan_opening_candidates, 套管前置檢核, clearanceMm | `domain/mep-opening-candidate-scan.md` |
+| cad 圖塊放置, block 轉族群, 灑水頭建模, 閥件建模, point placement from CAD block, INSERT to FamilyInstance | `domain/cad-block-point-placement.md` |
 
 Meta and governance domain files:
 
@@ -333,6 +345,21 @@ Shareable skills are packaged as installable plugins via `.claude-plugin/marketp
 - `fire-safety`
 
 Use `full` unless a constrained client context explicitly needs a smaller tool surface.
+
+## MCP Protocol Posture (2026-07-28 Dual-Era)
+
+The MCP protocol announced a 2026-07-28 revision. This project takes a **dual-era, additive-only** posture: adopt metadata-layer changes that are backward-compatible on their own, and defer anything that changes the wire protocol until an official SDK ships support for it.
+
+Adopted (additive, safe for old clients):
+
+- Every tool registered via `registerRevitTools()` carries a `title` plus boolean `readOnlyHint` / `destructiveHint` annotations, injected centrally by `MCP-Server/src/tools/annotations.ts`. Old clients ignore unknown fields.
+- `tools/list` is deterministically sorted by tool name (codepoint order) before it is returned.
+- MCP Apps (extension `io.modelcontextprotocol/ui`): the server advertises a `resources` capability and serves `ui://` HTML via `ListResources` / `ReadResource` (`MCP-Server/src/apps/register-apps.ts`). `detect_clashes` carries `_meta.ui.resourceUri = "ui://clash-viewer/index.html"`, pointing at the first interactive App — a clash viewer (`MCP-Server/src/apps/clash-viewer/`) bundled by `scripts/build-apps.mjs`. Hosts that don't support the extension simply ignore `_meta.ui`; `detect_clashes` still returns its normal text result.
+- SDK `@modelcontextprotocol/sdk` bumped 1.22 -> 1.30 (protocol `2025-11-25`) to satisfy the `@modelcontextprotocol/ext-apps` peer dependency. 1.30 still negotiates `2025-06-18`, so this is **not** the 2026-07-28 protocol itself and stays dual-era compatible.
+
+Deferred (wire-level, requires an official SDK for protocol 2026-07-28 before implementing): stateless connection mode, `server/discover`, `resultType`, Tasks core, HTTP/OAuth transport and authorization.
+
+Full rationale, FAQ, and fork-contributor notes: `docs/MIGRATION_GUIDE.md`.
 
 ## AI Client Configuration
 
@@ -372,6 +399,27 @@ QA/QC must cover:
 - markdown count-table claims (`| Runtime MCP tools | N |` style) in CLAUDE.md, README, README.zh-TW, and the audience inventory
 - client config template portability (no hardcoded user paths; `<YOUR_PROJECT_PATH>` placeholder required)
 - snapshot banner (`data-snapshot="YYYY-MM-DD"`) on date-prefixed `docs/MMDD-*.html`
+- MCP Registry publish consistency (`server.json` ↔ `MCP-Server/package.json` ↔ schema; 3-place version parity) — Phase 7 check `7-11`, see below
+- MCP 2026 compliance (Phase 9): 9-1 every tool declares a non-empty `title` and boolean `readOnlyHint`, with `destructiveHint=true` confined to the allow-list (`delete_element`, `dedup_detail_elements_in_view`); 9-2 every MCP Apps `ui://` resource resolves with the correct MIME (`text/html;profile=mcp-app`) and is self-contained (no external `src`/`href`/`url()` references)
+
+## MCP Registry Publish Consistency
+
+The MCP Registry publish artifacts must stay mutually consistent. This is owned by two **mandated Sonnet subagents** plus a deterministic gate — never hand-maintained ad hoc.
+
+**Main files** (any change to these triggers the loop): `server.json`, `MCP-Server/package.json`, `scripts/schemas/server.schema.json`, `.github/workflows/publish-mcp.yml`, `docs/MCP_REGISTRY_PUBLISH.md`.
+
+**The loop** — whenever a main file changes (a PostToolUse hook, `.claude/hooks/detect-registry-trigger.sh`, reminds you):
+
+1. **`mcp-registry-sync`** (`.claude/agents/mcp-registry-sync.md`, **model: sonnet**) — the fix agent. Aligns `server.json` `.version` / `.packages[].version` / `.packages[].identifier` / `.name` / repo URL, plus the README "Install from MCP Registry" section and the playbook's `Current version`, to the authoritative source (`MCP-Server/package.json` / the `v*` tag).
+2. **`mcp-registry-ops-inspect`** (`.claude/agents/mcp-registry-ops-inspect.md`, **model: sonnet**) — the read-only ops audit. Confirms no drift and reports the verdict.
+3. **Hard gate** — `python scripts/validate_publish_consistency.py` must exit `0` (also wired into `verify-qaqc.ps1` Phase 7 check `7-11`).
+
+**Rules:**
+
+- Both agents **must run as Sonnet** (pinned in their frontmatter — do not override).
+- **Never regress a version.** Only align upward to the authoritative/highest valid semver.
+- **Never `npm publish` / `mcp-publisher publish` manually.** Release only by pushing a `v*` tag → `.github/workflows/publish-mcp.yml` rewrites the 3 version places and publishes.
+- **Report in Traditional Chinese (繁體中文)** every time this area is touched: which files/fields changed, from what → to what, and the validator's exit code.
 
 ## Logging Protocol
 
