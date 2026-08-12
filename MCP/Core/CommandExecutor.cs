@@ -77,7 +77,27 @@ namespace RevitMCP.Core
                         result = GetProjectInfo();
                         break;
 
-                    
+                    case "set_project_units":
+                        result = SetProjectUnits(parameters);
+                        break;
+
+                    case "get_mep_segments_and_sizes":
+                        result = GetMepSegmentsAndSizes(parameters);
+                        break;
+
+                    case "get_mep_settings":
+                        result = GetMepSettings(parameters);
+                        break;
+
+                    case "get_mep_size_usage":
+                        result = GetMepSizeUsage(parameters);
+                        break;
+
+                    case "curate_mep_sizes":
+                        result = CurateMepSizes(parameters);
+                        break;
+
+
                     case "create_floor":
                         result = CreateFloor(parameters);
                         break;
@@ -268,6 +288,14 @@ namespace RevitMCP.Core
 
                     case "get_room_daylight_info":
                         result = GetRoomDaylightInfo(parameters);
+                        break;
+
+                    case "sync_room_ceiling_finish_from_ceilings":
+                        result = SyncRoomCeilingFinishFromCeilings(parameters);
+                        break;
+
+                    case "remap_room_finish_codes":
+                        result = RemapRoomFinishCodes(parameters);
                         break;
 
                     case "get_view_templates":
@@ -685,6 +713,9 @@ namespace RevitMCP.Core
                         break;
                     case "diagnose_curtain_wall_elevation_direction":
                         result = DiagnoseCurtainWallElevationDirection(parameters);
+                        break;
+                    case "diagnose_curtain_wall_elevation_dimensions":
+                        result = DiagnoseCurtainWallElevationDimensions(parameters);
                         break;
                     case "diagnose_curtain_wall_elevation_directions":
                         result = DiagnoseCurtainWallElevationDirections(parameters);
