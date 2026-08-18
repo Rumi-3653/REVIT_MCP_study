@@ -71,6 +71,91 @@ function Read-FileText {
     }
 }
 
+# Runs a git subcommand via .NET Process directly (NOT PowerShell's `&` native-command
+# capture) and decodes stdout/stderr explicitly as UTF-8. This deliberately bypasses
+# Windows PowerShell 5.1's ambient-encoding-dependent decoding of native-command output.
+# Neither $OutputEncoding (governs data PowerShell encodes INTO a native command's stdin,
+# not its output) nor [Console]::OutputEncoding (only takes effect when attached to a real
+# Win32 console — verified empirically to be a no-op for decoding purposes in redirected /
+# non-interactive hosts such as CI runners and automation harnesses, which is exactly how
+# QAQC often runs) can be trusted to work in every hosting context. Setting
+# ProcessStartInfo.StandardOutputEncoding directly on the child process is deterministic
+# regardless of the parent's console state or active codepage (CP950, CP65001, etc.).
+function Invoke-GitUtf8 {
+    param([string]$WorkingDirectory, [string]$ArgumentString)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "git"
+    $psi.Arguments = $ArgumentString
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    try {
+        $proc = [System.Diagnostics.Process]::Start($psi)
+    } catch {
+        return [PSCustomObject]@{ ExitCode = -1; StdOut = ""; Ok = $false }
+    }
+    # Read both streams asynchronously before WaitForExit to avoid a classic deadlock:
+    # if stderr fills its pipe buffer while we block synchronously reading stdout (or
+    # vice versa), the child process hangs waiting for a reader that never comes.
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $stderrTask = $proc.StandardError.ReadToEndAsync()
+    $proc.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $null = $stderrTask.GetAwaiter().GetResult()
+    return [PSCustomObject]@{ ExitCode = $proc.ExitCode; StdOut = $stdout; Ok = ($proc.ExitCode -eq 0) }
+}
+
+# Shared enumeration helper for repo-wide content-scanning phases (e.g. Phase 2-1 stale-path
+# scan). Restricts results to git-tracked + untracked-but-not-ignored files — i.e.
+# `git ls-files -co --exclude-standard` semantics. Gitignored paths (build output, local
+# AI-tool mirrors such as .agents/skills/, personal vaults, etc.) are declared non-repo
+# content, so QAQC content scans must not flag them just because they exist on someone's disk.
+# Falls back to a plain recursive Get-ChildItem (pre-2026-08-18 behavior) when git is
+# unavailable, $Root isn't inside a git work tree, or `git ls-files` itself fails (e.g.
+# index.lock contention / corrupt index — see the exit-code check below), so the script
+# never silently scans zero files. Returns objects with a .FullName property, matching
+# Get-ChildItem's shape.
+function Get-ScannableFiles {
+    param([string]$Root, [string]$Filter)
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    $isRepo = $false
+    $relFiles = @()
+    $lsFilesOk = $false
+    if ($gitCmd) {
+        $rp = Invoke-GitUtf8 -WorkingDirectory $Root -ArgumentString "rev-parse --is-inside-work-tree"
+        $isRepo = $rp.Ok
+        if ($isRepo) {
+            # -c core.quotepath=false: git's default quotes any non-ASCII filename (e.g. CJK
+            # names) as a "..." string with \NNN octal escapes, which is not a valid Windows
+            # path and breaks the Test-Path call below. Disabling it yields plain UTF-8 text,
+            # which Invoke-GitUtf8 above decodes deterministically.
+            $escapedFilter = $Filter -replace '"', '\"'
+            $ls = Invoke-GitUtf8 -WorkingDirectory $Root -ArgumentString "-c core.quotepath=false ls-files -co --exclude-standard -- `"$escapedFilter`""
+            # git ls-files can fail even though rev-parse succeeded (index.lock
+            # contention, corrupt index, etc.). Without this check, a failed call
+            # leaves $relFiles empty while $isRepo stays true, and the caller would
+            # silently scan zero files instead of falling back — a vacuous pass.
+            $lsFilesOk = $ls.Ok
+            if ($lsFilesOk) {
+                $relFiles = @($ls.StdOut -split "`r?`n" | Where-Object { $_ -ne "" })
+            }
+        }
+    }
+    if ($isRepo -and $lsFilesOk) {
+        return @($relFiles | Sort-Object -Unique | ForEach-Object {
+            $full = Join-Path $Root ($_ -replace '/', '\')
+            if (Test-Path -LiteralPath $full -PathType Leaf) {
+                [PSCustomObject]@{ FullName = $full }
+            }
+        })
+    }
+    return @(Get-ChildItem -Path $Root -Filter $Filter -Recurse -ErrorAction SilentlyContinue)
+}
+
 # Header
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -183,10 +268,26 @@ $excludedFiles = @(
     "docs/0328的課程討論.md"            # 歷史教材，保留當時上下文
 )
 
-$mdFiles = Get-ChildItem -Path $projectRoot -Filter "*.md" -Recurse -ErrorAction SilentlyContinue |
+$mdFiles = Get-ScannableFiles -Root $projectRoot -Filter "*.md" |
     Where-Object { $_.FullName -notmatch "node_modules|\.claude[\\/]plugins|docs[\\/]_archive|docs[\\/]fork-audit|[\\/]log[\\/]" }
     # log/ 為 append-only 事件日誌、docs/fork-audit/ 為 fork 盤點報告（gitignored）：
     # 兩者屬敘事性歷史文件，描述修正/外部 fork 時合法引用禁用檔名，非規範性指引，排除於 stale-ref 掃描。
+    # Get-ScannableFiles（2026-08-18）：改用 git ls-files -co --exclude-standard 語意，只掃描
+    # 已追蹤 + 未追蹤但未被 .gitignore 忽略的檔案。gitignored 內容（如本機工具產生的
+    # .agents/skills/ 鏡像）視為「宣告的非 repo 內容」，QAQC 掃描階段不應對其誤報。
+
+# Minimum-population self-check: the repo root always has *.md files (CLAUDE.md, README.md,
+# ...), so an empty scan population is never a legitimately clean result — it means
+# Get-ScannableFiles' git path failed silently upstream (or someone breaks that invariant).
+# Deliberately NOT a Write-Check: a healthy population emits no extra PASS line (keeps the
+# passing-run tally unchanged), while an empty one still hard-FAILs instead of letting Phase
+# 2-1 iterate zero files and report a vacuous "No stale references" PASS.
+if ($mdFiles.Count -eq 0) {
+    Write-Host "  FAIL  Scan population empty (validator self-check)" -ForegroundColor Red
+    Write-Host "         Get-ScannableFiles returned 0 *.md files under $projectRoot - this indicates a scan failure (git ls-files error, wrong root, etc.), not a clean repo" -ForegroundColor Red
+    $totalFail++
+    $failures += @{ Name = "Scan population empty (validator self-check)"; Detail = "Get-ScannableFiles returned 0 *.md files for Phase 2-1" }
+}
 
 $staleFound = $false
 foreach ($pattern in $stalePatterns) {
