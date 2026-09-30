@@ -2,8 +2,8 @@
 name: door-window-legend-workflow
 description: 門窗圖例表 seed-based Legend Component 建立流程，主入口為 door-window-legend-tools，缺少 seed 時透過 list_seeds 取得候選並等待使用者選擇。
 metadata:
-  version: "2.0"
-  updated: "2026-08-16"
+  version: "2.1"
+  updated: "2026-08-29"
   created: "2026-05-20"
   references:
     - "Issue #74（@yunchen-kt）：門窗圖例 Key 的承載位置 A/B 架構對照與 Revit API 設計約束 — https://github.com/shuotao/REVIT_MCP_study/issues/74"
@@ -146,7 +146,6 @@ update 額外回傳：
 - migration 成功後立即寫入 v2 metadata；後續 update 不再使用位置推斷。
 - 任一 selected ready item 無法完整 `NewGroup()`，整個 migration transaction rollback，`AppliedCount=0`。
 - legacy view 必須先 `apply=false` 取得 preview，再由使用者明確改用 `apply=true`；tool 不會自行從 preview 進入 apply。
-
 ## Tool Contract
 
 ### `door-window-legend-tools`
@@ -466,8 +465,16 @@ window list/create 額外輸出重點：
 
 ## Update 既有門窗圖例表
 
-> 本章保留的 bbox／FFL／TextNote 位置辨識只適用 legacy migration preview。v2 managed item 的一般 update 一律以 A+ metadata ownership 為準；兩者衝突時，A+ 規則優先。
+> 本章保留的 bbox／FFL／TextNote 位置辨識，會在下列情形對 legacy（未 migrate、`IsManaged=false`）item 觸發，v2 managed item（`IsManaged=true`）一律不會：
+>
+> 1. `mode=migrate` 的 preview／apply（見上方〈Legacy migration〉一節）。
+> 2. `mode=update` 對既有 legacy item 的 Type Mark 同步 fallback（`SyncDoorWindowLegendTypeMarkTextNote` → `FindDoorWindowLegendTypeMarkTextNote`，只在 `item.IsManaged` 為 false 時才會走到位置／metadata-text fallback 分支）。
+> 3. `CollectExistingDoorWindowLegendItems` 對 legacy item 的身份與窗台高辨識（`FindNearestDoorWindowFflLine`）——這是 **`list`／`create`／`update`／`migrate` 全部 mode 共用**的收集入口，不只 update；下方「Update 比對」一節「`detectedSillHeightCm` 由 component bbox bottom 與附近 FFL line Y 差推回」描述的正是這個行為。
+> 4. `mode=update` 刪除 stale legacy item 時的成員收集（`CollectDoorWindowLegendItemRelatedElementIds` 的 bbox 掃描，經 `DeleteDoorWindowLegendItemGroup` 進入）——下方「Update 行為」一節「stale 關聯元素包含...」「每個 stale item 使用 `SubTransaction` 刪除」描述的正是這個行為。
+>
+> v2 managed item（`IsManaged=true`）不論在 update 或 migrate 內，一律只用 `TryPopulateManagedExistingItem` 讀回的 A+ ownership metadata 辨識成員，兩者衝突時 A+ 規則優先。換句話說：legacy item 在被 `mode=migrate` 明確轉換前，`update`／`list` 仍會用舊規則辨識與同步（不會拒絕服務、也不會自動升級成 managed item）；只有 `mode=migrate` 的 `apply=true` 會把位置推斷結果寫成新 ownership metadata。
 
+> **驗證狀態（2026-08-29，本次 PR #119 採用時記錄）**：以下屬於本次在此環境自行覆核、可重現的 build-time／靜態證據 —— `dotnet build -c Release.R24` 與 `-c Release.R26` 皆 0 error（新增警告集中在本檔內，且都是專案既有的 nullable/obsolete 警告類別，不是新警告類型）；`MCP-Server` 的 `npm run build`（`tsc` + `build-apps.mjs`）與 `npm run test:opening-candidate-contract` 皆通過；`scripts/verify-qaqc.ps1 -SkipBuild -SkipDeploy` 在套用本次變更前後結果一致，180 個工具數與 tools-index 卡片數不變。**以下屬於貢獻者回報、本環境無 Revit 執行階段故未能重現** —— 實際在 Revit 內生成 Detail Group、ExtensibleStorage 往返讀寫是否如預期成組、重複執行 update 是否真的不重複生成、是否會殘留臨時 source 元素或無實體 GroupType，這些「已驗證」的敘述目前僅止於 PR 描述，尚待有 Revit 執行環境者實測。
 
 `door-window-legend-tools` 支援 `mode=update`，用於更新既有門表/窗表，不重新生成整張表。
 

@@ -3,6 +3,9 @@
 Revit 綠建材推送計畫擬訂引擎 v3 (基於 TASK-003 11大工程情境與 GreenMaterial_SharedParams.txt v5 六槽位共享參數)
 ========================================================================
 功能：
+  - 本檔案級承諾（僅限本檔，非專案級規則）：__main__ 示範區塊一律使用 GBM000000x 佔位符；
+    解釋演算法行為的技術註解中仍可能引用真實證號（如 GBM0103810／GBM0103338），
+    那屬於本專案 domain/*.md 允許的 SOP 型少量引用，不受此檔案級佔位符規則約束
   - 依據 /GM_import 指令解析材料 Set 的真實 licno 清單
   - 從 tabc_master_database.json 精確匹配全量材料數據
   - 自動判斷 Revit 品類 (Walls / Floors / Ceilings / Windows / Auxiliary)
@@ -20,14 +23,98 @@ import datetime
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # repo root (this file lives in tools/green-material/)
 DB_PATH = os.path.join(WORKSPACE, "tabc_master_database.json")
+# 由 GM_update_tabc_database.py 在每次真實抓取後寫入的抓取時間戳旁生檔，見該檔 _write_db_meta()。
+DB_META_PATH = os.path.join(WORKSPACE, "tabc_master_database.meta.json")
 SETS_FILE = os.path.join(WORKSPACE, "exported_material_sets.json")
 PLAN_JSON = os.path.join(WORKSPACE, "Revit_Injection_Plan.json")
 PLAN_REPORT = os.path.join(WORKSPACE, "docs", "green-material", "Revit_Injection_Plan_Report.md")
+
+# 本機資料庫超過幾天視為「舊」。TABC 標章的核發與續證是月級節奏，30 天足以涵蓋一輪異動。
+# 這是提醒門檻，不是硬擋門檻——過期標章的硬擋依據是每一筆標章自己的 period 結束日
+# （見 _period_end_expired），與資料庫年齡無關。
+STALE_THRESHOLD_DAYS = 30
 
 
 def load_database():
     with open(DB_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def database_freshness(threshold_days: int = STALE_THRESHOLD_DAYS) -> dict:
+    """回報本機 tabc_master_database.json 有多舊，供 /GM_import 在擬訂計畫前讀回並提醒使用者。
+
+    時間戳來源有兩級，回傳的 fetchedAtSource 明示採用了哪一級，不讓呼叫端把推估值當成確據：
+      - "meta"：tabc_master_database.meta.json 的 fetchedAt，由 /GM_update 真實抓取後寫入，是確據。
+      - "mtime"：旁生檔不存在（例如資料庫是這次改動之前產生的）時，退而用主資料庫檔案的修改時間。
+        這是近似值——複製、rsync、還原備份都會讓 mtime 與真實抓取時間脫鉤。
+
+    永遠不拋例外：資料庫不存在是全新 clone 的正常狀態（/GM_update 本身就是 bootstrap 入口），
+    回 status="missing" 並附可執行的下一步，而不是讓呼叫端崩在 FileNotFoundError。
+    """
+    result = {
+        "dbPath": DB_PATH,
+        "exists": os.path.exists(DB_PATH),
+        "recordCount": None,
+        "fetchedAt": None,
+        "fetchedAtSource": None,
+        "ageDays": None,
+        "thresholdDays": threshold_days,
+        "stale": False,
+        "status": "missing",
+        "recommendation": "",
+    }
+
+    if not result["exists"]:
+        result["recommendation"] = (
+            "本機尚無 tabc_master_database.json。請先執行 /GM_update 從 TABC 官網建立資料庫"
+            "（全新 clone 後的首次建立入口，不是錯誤狀態）。"
+        )
+        return result
+
+    try:
+        with open(DB_PATH, "r", encoding="utf-8") as f:
+            result["recordCount"] = len(json.load(f))
+    except (OSError, ValueError):
+        result["recordCount"] = None
+
+    fetched_at = None
+    if os.path.exists(DB_META_PATH):
+        try:
+            with open(DB_META_PATH, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            fetched_at = datetime.datetime.fromisoformat(meta.get("fetchedAt", ""))
+            result["fetchedAtSource"] = "meta"
+        except (OSError, ValueError, TypeError):
+            fetched_at = None
+
+    if fetched_at is None:
+        try:
+            fetched_at = datetime.datetime.fromtimestamp(os.path.getmtime(DB_PATH))
+            result["fetchedAtSource"] = "mtime"
+        except OSError:
+            fetched_at = None
+
+    if fetched_at is None:
+        result["status"] = "unknown"
+        result["recommendation"] = (
+            "讀不到本機資料庫的抓取時間（旁生檔與檔案 mtime 皆不可用），無法判斷資料多舊。"
+            "若不確定，執行 /GM_update 重新抓取最新資料。"
+        )
+        return result
+
+    age_days = (datetime.datetime.now() - fetched_at).days
+    result["fetchedAt"] = fetched_at.isoformat(timespec="seconds")
+    result["ageDays"] = age_days
+    result["stale"] = age_days > threshold_days
+    result["status"] = "stale" if result["stale"] else "fresh"
+    if result["stale"]:
+        result["recommendation"] = (
+            f"本機資料庫已 {age_days} 天未更新（門檻 {threshold_days} 天）。建議先執行 /GM_update 再擬訂計畫；"
+            "不更新仍可繼續，但計畫可能依據已失效或已異動的標章資料。"
+        )
+    else:
+        result["recommendation"] = ""
+    return result
 
 
 def load_exported_sets():
@@ -608,10 +695,17 @@ def generate_injection_plan(set_name: str, licno_list=None, user_intent: str = "
     has_auxiliary = False
     has_loadable_family = False
 
+    expired_licenses = []
+
     for item in matched:
         cat = item.get("category", "健康")
         sub_cat = item.get("subCategory", "通用類")
         title = item.get("title", "")
+
+        # 標章效期檢查（issue #128 第 3 層）：以標章自己的 period 結束日與今日比對，與資料庫年齡無關。
+        # 這裡只「標記」，不在 Python 端擋下——擋在 /GM_inject 寫入 Revit 之前，因為擬訂計畫本身
+        # 是唯讀動作，看得到過期材料才有辦法決定要換料還是重新抓資料。
+        is_expired, valid_until = _period_end_expired(item.get("period", ""))
 
         # 進行 TASK-003 11大情境深度分析
         mapping_info = analyze_material_mapping(sub_cat, title, wall_usage_hint)
@@ -671,10 +765,21 @@ def generate_injection_plan(set_name: str, licno_list=None, user_intent: str = "
         if mapping_info.get("isAuxiliary"):
             sp[mapping_info["auxiliaryParam"]] = f"{item.get('title')} ({item.get('licno')})"
 
+        if is_expired:
+            expired_licenses.append({
+                "licno": item.get("licno"),
+                "title": title,
+                "company": item.get("company"),
+                "period": item.get("period"),
+                "validUntil": valid_until,
+            })
+
         plan_items.append({
             "licno": item.get("licno"),
             "title": title,
             "company": item.get("company"),
+            "licenseExpired": is_expired,
+            "licenseValidUntil": valid_until,
             "category": cat,
             "subCategory": sub_cat,
             "targetRevitCategory": revit_cat,
@@ -719,6 +824,12 @@ def generate_injection_plan(set_name: str, licno_list=None, user_intent: str = "
         "targetRevitCategories": list(target_categories),
         "totalMaterialsCount": len(plan_items),
         "materialsMapping": plan_items,
+        # issue #128 第 1 層：把本機資料庫的抓取時間一併帶進計畫，讓計畫自帶「它是依據多舊的資料擬的」。
+        "databaseFreshness": database_freshness(),
+        # issue #128 第 3 層：效期已過今日的標章清單。非空時 /GM_inject 必須停下來要求使用者明確核准，
+        # 不得靜默寫入——已失效的證號會跟著 Type 進到交付模型、數量表與送審文件。
+        "expiredLicenses": expired_licenses,
+        "hasExpiredLicense": bool(expired_licenses),
         "executionSteps": execution_steps,
         "layerComposition": layer_composition,
         "layerCompositionSequenceLabels": (
@@ -756,6 +867,36 @@ def _write_markdown_report(plan: dict):
         f"- **材料 Set 名稱**: `{plan['setName']}`",
         f"- **擬訂時間**: `{plan['generatedAt']}`",
         f"- **執行 Agent**: `{plan['agentName']}`",
+    ]
+
+    # 0. 資料新鮮度與標章效期（issue #128）。永遠輸出，即使全部正常——「沒有這一段」與
+    # 「這一段說沒問題」在報告上必須看得出差別，否則讀報告的人無從得知這件事到底有沒有被檢查過。
+    fresh = plan.get("databaseFreshness") or {}
+    lines += ["", "---", "", "## 0. 資料來源新鮮度與標章效期", ""]
+    if fresh.get("status") == "missing":
+        lines.append("- ⛔ **本機無 tabc_master_database.json** —— 本計畫沒有可用的資料來源，請先執行 `/GM_update`。")
+    elif fresh.get("status") == "unknown":
+        lines.append("- ⚠️ **無法判斷本機資料庫的抓取時間**，不確定本計畫依據的資料有多舊。")
+    else:
+        src = "／來源：`/GM_update` 抓取時間戳" if fresh.get("fetchedAtSource") == "meta" else "／來源：檔案 mtime 推估（非確據）"
+        icon = "⚠️" if fresh.get("stale") else "✅"
+        lines.append(
+            f"- {icon} 本機資料庫抓取於 `{fresh.get('fetchedAt')}`，距今 **{fresh.get('ageDays')} 天**，"
+            f"共 **{fresh.get('recordCount')}** 筆（門檻 {fresh.get('thresholdDays')} 天{src}）"
+        )
+    if fresh.get("recommendation"):
+        lines.append(f"- {fresh['recommendation']}")
+
+    if plan.get("hasExpiredLicense"):
+        lines += ["", f"### ⛔ 標章效期已過（{len(plan['expiredLicenses'])} 項）—— 寫入 Revit 前必須經使用者明確核准", ""]
+        for e in plan["expiredLicenses"]:
+            lines.append(f"- `{e['licno']}`｜{e['title']}｜{e['company']}｜效期 `{e['period']}`（結束於 `{e['validUntil']}`）")
+        lines.append("")
+        lines.append("**不得靜默寫入**：已失效的證號會隨 Type 進入交付模型、數量明細表與送審文件。")
+    else:
+        lines += ["", "- ✅ 本計畫所有標章的效期結束日皆晚於今日（或效期格式無法解析，未被判定為過期）。"]
+
+    lines += [
         f"",
         f"---",
         f"",
@@ -995,7 +1136,14 @@ def compare_and_refresh_set(set_name: str) -> dict:
 
 
 if __name__ == "__main__":
-    licnos = ["GBM0104204", "GBM0104194"]
-    user_intent = "/GM_import 請為材料 Set 【室內牆】(GBM0104204, GBM0104194) 擬訂 Revit 綠建材寫入計畫"
+    import sys
+
+    if "--freshness" in sys.argv[1:]:
+        # /GM_import 第 1、2 層的確定性入口：只讀本機資料庫的年齡，不擬計畫、不寫任何檔案。
+        print(json.dumps(database_freshness(), ensure_ascii=False, indent=2))
+        sys.exit(0)
+
+    licnos = ["GBM0000000", "GBM0000001"]
+    user_intent = "/GM_import 請為材料 Set 【室內牆】(GBM0000000, GBM0000001) 擬訂 Revit 綠建材寫入計畫"
     plan = generate_injection_plan("室內牆", licnos, user_intent)
     write_back_to_set_manager("室內牆", plan)

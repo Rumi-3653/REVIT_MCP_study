@@ -17,6 +17,24 @@ Execute the Revit-side half of the `/GM_import` → `/GM_inject revit` two-step 
 - `revit <SetName>` → use that Set explicitly (look it up in `exported_material_sets.json`).
 - Exception: if the user is explicitly asking for Window/Door/loadable-family RFA injection (Scenario 7 below), there's no Set to look up — skip straight to the Scope check.
 
+## Mandatory pre-write gate — expired green-material licenses
+
+**Run this before the Scope check, on every path that writes to Revit, including Scenario 7 (RFA) and Scenario 8 (structural material).** A TABC label has an end date (`period`, e.g. `115/07/09 ~ 119/07/08`). Writing an already-expired certificate number into `GreenMaterial_Mat*_CertNo` / `_ValidUntil` puts a dead license into the delivered model, its schedules, and any submission documents produced from them. The plan engine detects this; this skill is what stops it.
+
+1. Regenerate (or read) the plan for this Set as the scenario section tells you to, then check `plan['hasExpiredLicense']`.
+2. If it is `false`, continue to the Scope check — say nothing further about expiry.
+3. If it is `true`, **stop your turn before calling any Revit-mutating tool** and:
+   - List every entry in `plan['expiredLicenses']`: licno, title, company, `period`, and the parsed `validUntil` end date.
+   - State plainly which fields would carry the expired certificate, and that the model, schedules, and submission documents inherit it.
+   - Note the database's age from `plan['databaseFreshness']` — if it is `stale` or `missing`, the expiry may simply be a stale local snapshot, and `/GM_update` is the right first move rather than approving the write.
+   - Ask for **explicit approval to write the expired license(s) anyway**. Silence, "go ahead" for an earlier question, or a general confirmation from before this list was shown do **not** count. Do not offer to skip just the expired material unless the user asks — dropping a material from a Set silently is its own failure mode.
+4. If the user approves, proceed — but the write is no longer silent: in your final report, state which Type(s) and which `Mat*` slot(s) carry an expired license, with the licno and its end date. Repeat it in the Set status update text you write to `exported_material_sets.json` (`plannedActions`), so the record survives this conversation.
+5. If the user declines, stop. Do not write anything, and tell them the two ways forward: run `/GM_update` then `/GM_import` again (if the local snapshot is stale), or replace the material in the Set on the showcase page and re-align.
+
+Never treat an expired license as a warning to mention in passing while continuing to write. The method-layer rule is in `domain/GM_parameter-schema.md`; if this section and that file ever disagree, the domain file wins.
+
+---
+
 ## Scope check — which scenario?
 
 Read the Set's `purpose` field in `exported_material_sets.json` (e.g. `"組合方式: 單一組合 | 品類: Wall | 補充條件: 無"`).

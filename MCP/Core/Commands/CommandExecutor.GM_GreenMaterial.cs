@@ -34,6 +34,7 @@ namespace RevitMCP.Core
             JArray categoriesArr = parameters["categories"] as JArray;
             bool bindToInstance = parameters["bindToInstance"]?.Value<bool>() ?? false;
             JArray groupFilterArr = parameters["groupFilter"] as JArray;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(filePath))
                 throw new Exception("請提供共享參數檔路徑 (filePath)");
@@ -107,6 +108,114 @@ namespace RevitMCP.Core
                 DefinitionFile defFile = app.OpenSharedParameterFile();
                 if (defFile == null)
                     throw new Exception($"無法開啟共享參數檔: {filePath}");
+
+                // === dryRun：純讀取 BindingMap 現況分類，完全不開 Transaction、不呼叫任何
+                // Insert/Remove/ReInsert，也不去 Mutate 從 ElementBinding.Categories 取回的 CategorySet
+                // （只用來檢查成員資格，不 Insert 回去），保證文件狀態前後完全相同。 ===
+                if (dryRun)
+                {
+                    int wouldBind = 0, wouldExpand = 0, wouldSkip = 0, wouldRebind = 0;
+                    var planItems = new List<object>();
+
+                    foreach (DefinitionGroup defGroup in defFile.Groups)
+                    {
+                        foreach (Definition def in defGroup.Definitions)
+                        {
+                            ExternalDefinition exDef = def as ExternalDefinition;
+                            if (exDef == null) continue;
+
+                            BindingMap bindingMap = doc.ParameterBindings;
+                            Definition existingDef = null;
+                            var it = bindingMap.ForwardIterator();
+                            while (it.MoveNext())
+                            {
+                                if (it.Key.Name == exDef.Name) { existingDef = it.Key; break; }
+                            }
+
+                            if (existingDef == null)
+                            {
+                                wouldBind++;
+                                planItems.Add(new
+                                {
+                                    ParameterName = exDef.Name,
+                                    Group = defGroup.Name,
+                                    DataType = exDef.GetDataType().TypeId,
+                                    Status = "尚未綁定，會建立新綁定"
+                                });
+                                continue;
+                            }
+
+                            Binding existingBinding = bindingMap.get_Item(existingDef);
+                            bool isInstanceBinding = existingBinding is InstanceBinding;
+                            bool bindingKindMismatch = (!bindToInstance && isInstanceBinding) || (bindToInstance && !isInstanceBinding);
+
+                            if (bindingKindMismatch)
+                            {
+                                wouldRebind++;
+                                planItems.Add(new
+                                {
+                                    ParameterName = exDef.Name,
+                                    Group = defGroup.Name,
+                                    Status = "已綁定但綁定型態(Type/Instance)不符，會先移除再重新綁定"
+                                });
+                                continue;
+                            }
+
+                            // 綁定型態相符，僅檢查 CategorySet 成員資格（不 Insert，純讀取比對）
+                            ElementBinding elemBinding = existingBinding as ElementBinding;
+                            CategorySet existingCats = elemBinding?.Categories;
+                            bool needsExpand = false;
+                            if (existingCats != null)
+                            {
+                                foreach (Category targetCat in targetCategories)
+                                {
+                                    bool covered = false;
+                                    foreach (Category existingCat in existingCats)
+                                    {
+                                        if (existingCat.Id == targetCat.Id) { covered = true; break; }
+                                    }
+                                    if (!covered) { needsExpand = true; break; }
+                                }
+                            }
+
+                            if (needsExpand)
+                            {
+                                wouldExpand++;
+                                planItems.Add(new
+                                {
+                                    ParameterName = exDef.Name,
+                                    Group = defGroup.Name,
+                                    Status = "已綁定但缺少此次要求的品類，會擴充綁定"
+                                });
+                            }
+                            else
+                            {
+                                wouldSkip++;
+                                planItems.Add(new
+                                {
+                                    ParameterName = exDef.Name,
+                                    Group = defGroup.Name,
+                                    Status = "已存在相符綁定，會冪等跳過"
+                                });
+                            }
+                        }
+                    }
+
+                    return new
+                    {
+                        Success = true,
+                        DryRun = true,
+                        FilePath = filePath,
+                        WouldBindCount = wouldBind,
+                        WouldRebindCount = wouldRebind,
+                        WouldExpandCount = wouldExpand,
+                        WouldSkipCount = wouldSkip,
+                        Categories = categoriesArr.Select(c => c.Value<string>()).ToArray(),
+                        BindingLevel = bindToInstance ? "Instance" : "Type",
+                        Parameters = planItems,
+                        Message = $"[dryRun] 預計新增綁定 {wouldBind} 個、型態不符重綁 {wouldRebind} 個、擴充品類 {wouldExpand} 個、冪等跳過 {wouldSkip} 個；未實際呼叫任何 BindingMap 變更"
+                    };
+                }
 
                 int totalBound = 0;
                 int totalSkipped = 0;
@@ -331,6 +440,7 @@ namespace RevitMCP.Core
             string structureMaterialName = parameters["structureMaterialName"]?.Value<string>();
             double finishThicknessMm = parameters["finishThicknessMm"]?.Value<double>() ?? 20.0;
             double structureThicknessMm = parameters["structureThicknessMm"]?.Value<double>() ?? 150.0;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(newTypeName))
                 throw new Exception("請指定新類型名稱 (newTypeName)");
@@ -345,6 +455,39 @@ namespace RevitMCP.Core
 
             double finishFeet = finishThicknessMm / 304.8;
             double structFeet = structureThicknessMm / 304.8;
+
+            // === dryRun：純讀取查詢（型別集合掃描、材質名稱比對），不開 Transaction、不 Duplicate、
+            // 不建立任何 Material，Revit 文件前後完全相同。 ===
+            if (dryRun)
+            {
+                bool isWallType = source is WallType;
+                bool nameCollision = TypeNameExists(doc, source, newTypeName);
+                bool finishMaterialExists = MaterialExistsByName(doc, finishMaterialName);
+                bool structureMaterialExists = MaterialExistsByName(doc, structureMaterialName);
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    SourceTypeId = sourceTypeId,
+                    SourceTypeName = source.Name,
+                    IsWallType = isWallType,
+                    PlannedNewTypeName = newTypeName,
+                    NewTypeNameCollision = nameCollision,
+                    FinishMaterial = new { Name = finishMaterialName, AlreadyExists = finishMaterialExists },
+                    StructureMaterial = new { Name = structureMaterialName, AlreadyExists = structureMaterialExists },
+                    PlannedLayers = new object[]
+                    {
+                        new { Function = "Finish1", Material = finishMaterialName, ThicknessMm = finishThicknessMm },
+                        new { Function = "Structure", Material = structureMaterialName, ThicknessMm = structureThicknessMm },
+                        new { Function = "Finish2", Material = finishMaterialName, ThicknessMm = finishThicknessMm },
+                    },
+                    Message = (isWallType
+                        ? $"[dryRun] 會複製類型 '{source.Name}' 為新類型 '{newTypeName}'" + (nameCollision ? "（名稱已存在，Revit 會自動加流水號後綴）" : "") + $"，並套用 Finish1/Structure/Finish2 三層構造"
+                        : $"[dryRun] 來源類型 '{source.Name}' 不是 WallType，複製後 CompoundStructure 分層不會被套用（僅記錄材質建立計畫）")
+                        + $"；飾面材質 '{finishMaterialName}' 會{(finishMaterialExists ? "重用既有" : "新建")}，結構材質 '{structureMaterialName}' 會{(structureMaterialExists ? "重用既有" : "新建")}"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"複製類型與實體建立綠建材材質: {newTypeName}"))
             {
@@ -397,9 +540,13 @@ namespace RevitMCP.Core
         {
             Document doc = _uiApp.ActiveUIDocument.Document;
             string materialName = parameters["materialName"]?.Value<string>();
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(materialName))
                 throw new Exception("請指定 materialName");
+
+            if (dryRun)
+                return DryRunMaterialCreationPlan(doc, materialName);
 
             using (Transaction trans = new Transaction(doc, $"建立純淨材質: {materialName}"))
             {
@@ -427,9 +574,13 @@ namespace RevitMCP.Core
             int r = parameters["r"]?.Value<int>() ?? 235;
             int g = parameters["g"]?.Value<int>() ?? 245;
             int b = parameters["b"]?.Value<int>() ?? 240;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(materialName))
                 throw new Exception("請指定 materialName");
+
+            if (dryRun)
+                return DryRunMaterialCreationPlan(doc, materialName, new { r, g, b });
 
             using (Transaction trans = new Transaction(doc, $"建立獨立綠建材材質: {materialName}"))
             {
@@ -481,6 +632,62 @@ namespace RevitMCP.Core
                 SearchKeyword = searchKeyword,
                 Materials = matList
             };
+        }
+
+        /// <summary>
+        /// dryRun 專用：純讀取查詢材質是否已存在，回傳「會重用既有／會新建」的計畫，
+        /// 不呼叫 Duplicate/Material.Create，不開 Transaction。供 create_green_material、
+        /// create_material_by_domain 共用（create_material 走 Material.cs 的 CreateCustomMaterial，
+        /// 邏輯稍有差異——固定顏色/MaterialClass "測試類"——故該處另外內縮實作，不呼叫本方法）。
+        /// </summary>
+        private object DryRunMaterialCreationPlan(Document doc, string materialName, object plannedColor = null)
+        {
+            Material existing = new FilteredElementCollector(doc).OfClass(typeof(Material)).Cast<Material>()
+                .FirstOrDefault(m => m.Name.Equals(materialName, StringComparison.OrdinalIgnoreCase));
+
+            if (existing != null)
+            {
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    AlreadyExists = true,
+                    MaterialId = existing.Id.GetIdValue(),
+                    MaterialName = existing.Name,
+                    Message = $"[dryRun] 材質 '{existing.Name}' 已存在 (ID:{existing.Id})，實際執行時只會更新顏色，不會新建"
+                };
+            }
+
+            return new
+            {
+                Success = true,
+                DryRun = true,
+                AlreadyExists = false,
+                PlannedMaterialName = materialName,
+                PlannedColor = plannedColor,
+                Message = $"[dryRun] 材質 '{materialName}' 尚不存在，實際執行時會複製既有材質庫中的基礎材質建立這個新 Material"
+            };
+        }
+
+        /// <summary>
+        /// dryRun 專用純讀取查詢：材質是否已依名稱存在，不建立/修改任何 Material。
+        /// </summary>
+        private bool MaterialExistsByName(Document doc, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return new FilteredElementCollector(doc).OfClass(typeof(Material)).Cast<Material>()
+                .Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// dryRun 專用純讀取查詢：與來源同一 ElementType 子類別中是否已存在同名 Type。
+        /// 僅供預警用——Revit 實際 Duplicate() 撞名時會自動加流水號後綴，不會拋錯。
+        /// </summary>
+        private bool TypeNameExists(Document doc, ElementType source, string newTypeName)
+        {
+            if (string.IsNullOrEmpty(newTypeName)) return false;
+            return new FilteredElementCollector(doc).OfClass(source.GetType()).Cast<ElementType>()
+                .Any(t => t.Name.Equals(newTypeName, StringComparison.OrdinalIgnoreCase));
         }
 
         private Material GetOrCreatePureMaterial(Document doc, string name, Color color)
@@ -561,6 +768,7 @@ namespace RevitMCP.Core
         {
             Document doc = _uiApp.ActiveUIDocument.Document;
             IdType typeId = parameters["typeId"]?.Value<IdType>() ?? 0;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             ElementType type = doc.GetElement(new ElementId(typeId)) as ElementType;
             if (type == null)
@@ -569,41 +777,67 @@ namespace RevitMCP.Core
             var written = new List<string>();
             var missing = new List<string>();
 
-            using (Transaction trans = new Transaction(doc, $"寫入綠建材共享參數: {type.Name}"))
+            // dryRun 時完全不呼叫 Transaction.Start()/Commit()：下面呼叫的 SetTypeParam* /
+            // WriteGreenMaterialSlot 全部收到 dryRun=true，內部只做 LookupParameter + IsReadOnly
+            // 的唯讀檢查，絕不呼叫 Parameter.Set()，Revit 文件狀態不受影響。
+            void PopulateWrittenAndMissing()
             {
-                trans.Start();
-
                 JToken certifiedToken = parameters["certified"];
                 if (certifiedToken != null && certifiedToken.Type != JTokenType.Null)
-                    SetTypeParamBool(type, "GreenMaterial_Certified", certifiedToken.Value<bool>(), written, missing);
+                    SetTypeParamBool(type, "GreenMaterial_Certified", certifiedToken.Value<bool>(), written, missing, dryRun);
 
                 JToken recycledToken = parameters["recycledRatio"];
                 if (recycledToken != null && recycledToken.Type != JTokenType.Null)
-                    SetTypeParamDouble(type, "GreenMaterial_RecycledRatio", recycledToken.Value<double>(), written, missing);
+                    SetTypeParamDouble(type, "GreenMaterial_RecycledRatio", recycledToken.Value<double>(), written, missing, dryRun);
 
                 JToken acousticToken = parameters["acousticNRC"];
                 if (acousticToken != null && acousticToken.Type != JTokenType.Null)
-                    SetTypeParamDouble(type, "GreenMaterial_AcousticNRC", acousticToken.Value<double>(), written, missing);
+                    SetTypeParamDouble(type, "GreenMaterial_AcousticNRC", acousticToken.Value<double>(), written, missing, dryRun);
 
-                WriteGreenMaterialSlot(type, "Mat1", parameters["mat1"] as JObject, includeExtended: true, written, missing);
-                WriteGreenMaterialSlot(type, "Mat2", parameters["mat2"] as JObject, includeExtended: true, written, missing);
-                WriteGreenMaterialSlot(type, "Mat3", parameters["mat3"] as JObject, includeExtended: false, written, missing);
-                WriteGreenMaterialSlot(type, "Mat4", parameters["mat4"] as JObject, includeExtended: true, written, missing);
-                WriteGreenMaterialSlot(type, "Mat5", parameters["mat5"] as JObject, includeExtended: true, written, missing);
-                WriteGreenMaterialSlot(type, "Mat6", parameters["mat6"] as JObject, includeExtended: true, written, missing);
+                WriteGreenMaterialSlot(type, "Mat1", parameters["mat1"] as JObject, includeExtended: true, written, missing, dryRun);
+                WriteGreenMaterialSlot(type, "Mat2", parameters["mat2"] as JObject, includeExtended: true, written, missing, dryRun);
+                WriteGreenMaterialSlot(type, "Mat3", parameters["mat3"] as JObject, includeExtended: false, written, missing, dryRun);
+                WriteGreenMaterialSlot(type, "Mat4", parameters["mat4"] as JObject, includeExtended: true, written, missing, dryRun);
+                WriteGreenMaterialSlot(type, "Mat5", parameters["mat5"] as JObject, includeExtended: true, written, missing, dryRun);
+                WriteGreenMaterialSlot(type, "Mat6", parameters["mat6"] as JObject, includeExtended: true, written, missing, dryRun);
 
                 JToken adhesiveToken = parameters["adhesive"];
                 if (adhesiveToken != null && adhesiveToken.Type != JTokenType.Null)
-                    SetTypeParamText(type, "GreenMaterial_Adhesive", adhesiveToken.Value<string>(), written, missing);
+                    SetTypeParamText(type, "GreenMaterial_Adhesive", adhesiveToken.Value<string>(), written, missing, dryRun);
 
                 JToken sealantToken = parameters["sealant"];
                 if (sealantToken != null && sealantToken.Type != JTokenType.Null)
-                    SetTypeParamText(type, "GreenMaterial_Sealant", sealantToken.Value<string>(), written, missing);
+                    SetTypeParamText(type, "GreenMaterial_Sealant", sealantToken.Value<string>(), written, missing, dryRun);
 
                 JToken waterproofingToken = parameters["waterproofing"];
                 if (waterproofingToken != null && waterproofingToken.Type != JTokenType.Null)
-                    SetTypeParamText(type, "GreenMaterial_Waterproofing", waterproofingToken.Value<string>(), written, missing);
+                    SetTypeParamText(type, "GreenMaterial_Waterproofing", waterproofingToken.Value<string>(), written, missing, dryRun);
+            }
 
+            if (dryRun)
+            {
+                PopulateWrittenAndMissing();
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    TypeId = typeId,
+                    TypeName = type.Name,
+                    WouldWriteCount = written.Count,
+                    WouldWriteParameters = written,
+                    MissingCount = missing.Count,
+                    MissingParameters = missing,
+                    Message = missing.Count == 0
+                        ? $"[dryRun] 預計寫入 {written.Count} 個綠建材共享參數至 '{type.Name}'，尚未實際呼叫 Parameter.Set()"
+                        : $"[dryRun] 預計寫入 {written.Count} 個參數，{missing.Count} 個參數在 Type '{type.Name}' 上找不到（可能尚未透過 load_shared_parameters 綁定至此品類）：{string.Join(", ", missing)}"
+                };
+            }
+
+            using (Transaction trans = new Transaction(doc, $"寫入綠建材共享參數: {type.Name}"))
+            {
+                trans.Start();
+                PopulateWrittenAndMissing();
                 trans.Commit();
             }
 
@@ -622,7 +856,9 @@ namespace RevitMCP.Core
             };
         }
 
-        private void WriteGreenMaterialSlot(ElementType type, string slot, JObject mat, bool includeExtended, List<string> written, List<string> missing)
+        // dryRun 刻意不給預設值：漏傳會落入寫入路徑且編譯器不會警告，
+        // 設為必要參數讓遺漏成為編譯期錯誤。（2026-08 gm-monstrare harvest，S3 inspector 建議）
+        private void WriteGreenMaterialSlot(ElementType type, string slot, JObject mat, bool includeExtended, List<string> written, List<string> missing, bool dryRun)
         {
             if (mat == null) return;
 
@@ -630,14 +866,14 @@ namespace RevitMCP.Core
             {
                 JToken token = mat[field];
                 if (token == null || token.Type == JTokenType.Null) return;
-                SetTypeParamText(type, $"GreenMaterial_{slot}_{suffix}", token.Value<string>(), written, missing);
+                SetTypeParamText(type, $"GreenMaterial_{slot}_{suffix}", token.Value<string>(), written, missing, dryRun);
             }
 
             void SetNum(string field, string suffix)
             {
                 JToken token = mat[field];
                 if (token == null || token.Type == JTokenType.Null) return;
-                SetTypeParamDouble(type, $"GreenMaterial_{slot}_{suffix}", token.Value<double>(), written, missing);
+                SetTypeParamDouble(type, $"GreenMaterial_{slot}_{suffix}", token.Value<double>(), written, missing, dryRun);
             }
 
             SetText("name", "Name");
@@ -657,27 +893,37 @@ namespace RevitMCP.Core
             }
         }
 
-        private void SetTypeParamText(ElementType type, string paramName, string value, List<string> written, List<string> missing)
+        /// <summary>
+        /// dryRun=false（預設）：正常查參數＋寫值。dryRun=true：只查 LookupParameter/IsReadOnly
+        /// 分類 written/missing，絕不呼叫 Parameter.Set()。
+        /// </summary>
+        // dryRun 刻意不給預設值：漏傳會落入寫入路徑且編譯器不會警告，
+        // 設為必要參數讓遺漏成為編譯期錯誤。（2026-08 gm-monstrare harvest，S3 inspector 建議）
+        private void SetTypeParamText(ElementType type, string paramName, string value, List<string> written, List<string> missing, bool dryRun)
         {
             Parameter p = type.LookupParameter(paramName);
             if (p == null || p.IsReadOnly) { missing.Add(paramName); return; }
-            p.Set(value ?? "");
+            if (!dryRun) p.Set(value ?? "");
             written.Add(paramName);
         }
 
-        private void SetTypeParamDouble(ElementType type, string paramName, double value, List<string> written, List<string> missing)
+        // dryRun 刻意不給預設值：漏傳會落入寫入路徑且編譯器不會警告，
+        // 設為必要參數讓遺漏成為編譯期錯誤。（2026-08 gm-monstrare harvest，S3 inspector 建議）
+        private void SetTypeParamDouble(ElementType type, string paramName, double value, List<string> written, List<string> missing, bool dryRun)
         {
             Parameter p = type.LookupParameter(paramName);
             if (p == null || p.IsReadOnly) { missing.Add(paramName); return; }
-            p.Set(value);
+            if (!dryRun) p.Set(value);
             written.Add(paramName);
         }
 
-        private void SetTypeParamBool(ElementType type, string paramName, bool value, List<string> written, List<string> missing)
+        // dryRun 刻意不給預設值：漏傳會落入寫入路徑且編譯器不會警告，
+        // 設為必要參數讓遺漏成為編譯期錯誤。（2026-08 gm-monstrare harvest，S3 inspector 建議）
+        private void SetTypeParamBool(ElementType type, string paramName, bool value, List<string> written, List<string> missing, bool dryRun)
         {
             Parameter p = type.LookupParameter(paramName);
             if (p == null || p.IsReadOnly) { missing.Add(paramName); return; }
-            p.Set(value ? 1 : 0);
+            if (!dryRun) p.Set(value ? 1 : 0);
             written.Add(paramName);
         }
 
@@ -696,6 +942,7 @@ namespace RevitMCP.Core
             Document doc = _uiApp.ActiveUIDocument.Document;
             IdType sourceTypeId = parameters["sourceTypeId"]?.Value<IdType>() ?? 0;
             string materialName = parameters["materialName"]?.Value<string>();
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(materialName))
                 throw new Exception("請指定 materialName（同時作為新 Type 名稱與 Material 名稱，格式須為 GBM編號_材料名稱）");
@@ -703,6 +950,45 @@ namespace RevitMCP.Core
             ElementType source = doc.GetElement(new ElementId(sourceTypeId)) as ElementType;
             if (source == null)
                 throw new Exception($"找不到來源類型 ID: {sourceTypeId}");
+
+            if (dryRun)
+            {
+                bool nameCollision = TypeNameExists(doc, source, materialName);
+                bool matExists = MaterialExistsByName(doc, materialName);
+                // 用來源 Type 本身查 CompoundStructure/MATERIAL_ID_PARAM——Duplicate() 不會改變
+                // 構造層定義存不存在，用 source 查等同於查將來的 newType，且完全不需要先 Duplicate。
+                CompoundStructure cs = GetCompoundStructureForElement(source);
+                int plannedLayers;
+                string planNote;
+                if (cs != null)
+                {
+                    plannedLayers = cs.LayerCount;
+                    planNote = $"會把材質指派到全部 {plannedLayers} 層 CompoundStructure";
+                }
+                else
+                {
+                    Parameter p = source.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM);
+                    bool hasMaterialParam = p != null && !p.IsReadOnly;
+                    plannedLayers = hasMaterialParam ? 1 : 0;
+                    planNote = hasMaterialParam
+                        ? "沒有 CompoundStructure，會透過 MATERIAL_ID_PARAM 指派單一材質參數"
+                        : "沒有 CompoundStructure 也沒有可寫入的材質參數，實際執行時 LayersAssigned 可能為 0";
+                }
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    SourceTypeId = sourceTypeId,
+                    SourceTypeName = source.Name,
+                    PlannedNewTypeName = materialName,
+                    NewTypeNameCollision = nameCollision,
+                    MaterialAlreadyExists = matExists,
+                    PlannedLayersAssigned = plannedLayers,
+                    Message = $"[dryRun] 會複製類型 '{source.Name}' 為新類型 '{materialName}'" + (nameCollision ? "（名稱已存在，Revit 會自動加流水號後綴）" : "")
+                        + $"，材質 '{materialName}' 會{(matExists ? "重用既有" : "新建")}；{planNote}"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"複製類型與實體建立單一材質: {materialName}"))
             {
@@ -764,6 +1050,7 @@ namespace RevitMCP.Core
             Document doc = _uiApp.ActiveUIDocument.Document;
             IdType sourceTypeId = parameters["sourceTypeId"]?.Value<IdType>() ?? 0;
             string newTypeName = parameters["newTypeName"]?.Value<string>();
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(newTypeName))
                 throw new Exception("請指定新類型名稱 (newTypeName)");
@@ -771,6 +1058,22 @@ namespace RevitMCP.Core
             ElementType source = doc.GetElement(new ElementId(sourceTypeId)) as ElementType;
             if (source == null)
                 throw new Exception($"找不到來源類型 ID: {sourceTypeId}");
+
+            if (dryRun)
+            {
+                bool nameCollision = TypeNameExists(doc, source, newTypeName);
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    SourceTypeId = sourceTypeId,
+                    SourceTypeName = source.Name,
+                    PlannedNewTypeName = newTypeName,
+                    NewTypeNameCollision = nameCollision,
+                    Message = $"[dryRun] 會複製類型 '{source.Name}' 為新類型 '{newTypeName}'" + (nameCollision ? "（名稱已存在，Revit 會自動加流水號後綴）" : "")
+                        + "，構造層與原類型完全一致，不會建立或指派任何材質"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"複製類型（不修改構造）: {newTypeName}"))
             {
@@ -808,6 +1111,7 @@ namespace RevitMCP.Core
             IdType sourceTypeId = parameters["sourceTypeId"]?.Value<IdType>() ?? 0;
             string newTypeName = parameters["newTypeName"]?.Value<string>();
             JArray layersArr = parameters["layers"] as JArray;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(newTypeName))
                 throw new Exception("請指定新類型名稱 (newTypeName)");
@@ -817,6 +1121,62 @@ namespace RevitMCP.Core
             ElementType source = doc.GetElement(new ElementId(sourceTypeId)) as ElementType;
             if (source == null)
                 throw new Exception($"找不到來源類型 ID: {sourceTypeId}");
+
+            if (dryRun)
+            {
+                // 用來源 Type 本身查 CompoundStructure（Duplicate() 不改變構造層定義存不存在），
+                // 完全不需要先 Duplicate 就能驗證「來源是否支援多層構造」。
+                CompoundStructure sourceCs = GetCompoundStructureForElement(source);
+                if (sourceCs == null)
+                    throw new Exception($"來源類型 '{source.Name}' 沒有 CompoundStructure（可能是無分層構造的族群類型），無法套用多層構造");
+
+                bool nameCollision = TypeNameExists(doc, source, newTypeName);
+                var layerReport = new List<object>();
+                var layerFunctionOrder = new List<string>();
+
+                foreach (JToken tok in layersArr)
+                {
+                    JObject layerObj = tok as JObject;
+                    if (layerObj == null)
+                        throw new Exception("layers 陣列中每一項都必須是物件 { materialName, layerFunction, thicknessMm }");
+
+                    string materialName = layerObj["materialName"]?.Value<string>();
+                    string layerFunctionStr = layerObj["layerFunction"]?.Value<string>();
+                    double thicknessMm = layerObj["thicknessMm"]?.Value<double>() ?? 20.0;
+
+                    if (string.IsNullOrEmpty(materialName))
+                        throw new Exception("每一層都必須指定 materialName（格式須為 GBM編號_材料名稱）");
+                    if (string.IsNullOrEmpty(layerFunctionStr))
+                        throw new Exception("每一層都必須指定 layerFunction（Structure/Substrate/Insulation/Finish1/Finish2/Membrane）");
+
+                    // 僅驗證合法性（不合法會 throw），不建立任何材質
+                    ParseMaterialFunctionAssignment(layerFunctionStr);
+                    bool matExists = MaterialExistsByName(doc, materialName);
+
+                    layerReport.Add(new
+                    {
+                        MaterialName = materialName,
+                        MaterialAlreadyExists = matExists,
+                        LayerFunction = layerFunctionStr,
+                        ThicknessMm = thicknessMm
+                    });
+                    layerFunctionOrder.Add(layerFunctionStr);
+                }
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    SourceTypeId = sourceTypeId,
+                    SourceTypeName = source.Name,
+                    PlannedNewTypeName = newTypeName,
+                    NewTypeNameCollision = nameCollision,
+                    LayerCount = layerReport.Count,
+                    PlannedLayers = layerReport,
+                    Message = $"[dryRun] 會複製類型 '{source.Name}' 為新類型 '{newTypeName}'" + (nameCollision ? "（名稱已存在，Revit 會自動加流水號後綴）" : "")
+                        + $"，套入 {layerReport.Count} 層構造：{string.Join(" → ", layerFunctionOrder)}"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"複製類型與實體建立多層綠建材構造: {newTypeName}"))
             {
@@ -922,6 +1282,7 @@ namespace RevitMCP.Core
             string patternType = parameters["patternType"]?.Value<string>();
             double? spacingToken = parameters["spacingMm"]?.Value<double?>();
             string target = parameters["target"]?.Value<string>() ?? "Surface";
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(patternType))
                 throw new Exception("請指定 patternType（Grid / Wood / None）");
@@ -939,6 +1300,51 @@ namespace RevitMCP.Core
             }
             if (mat == null)
                 throw new Exception("找不到材質，請提供正確的 materialId 或 materialName");
+
+            if (dryRun)
+            {
+                string plannedPatternName = null;
+                bool patternAlreadyExists = false;
+
+                switch (patternType)
+                {
+                    case "Grid":
+                        {
+                            double spacing = spacingToken ?? 600.0;
+                            plannedPatternName = $"TABC_Grid_{(int)spacing}x{(int)spacing}";
+                            patternAlreadyExists = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement))
+                                .Cast<FillPatternElement>().Any(x => x.Name == plannedPatternName);
+                            break;
+                        }
+                    case "Wood":
+                        {
+                            double spacing = spacingToken ?? 100.0;
+                            plannedPatternName = $"TABC_WoodGrain_{(int)spacing}";
+                            patternAlreadyExists = new FilteredElementCollector(doc).OfClass(typeof(FillPatternElement))
+                                .Cast<FillPatternElement>().Any(x => x.Name == plannedPatternName);
+                            break;
+                        }
+                    case "None":
+                        break;
+                    default:
+                        throw new Exception($"不支援的 patternType: '{patternType}'（支援 Grid / Wood / None）");
+                }
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    MaterialId = mat.Id.GetIdValue(),
+                    MaterialName = mat.Name,
+                    PatternType = patternType,
+                    PlannedPatternName = plannedPatternName,
+                    PatternAlreadyExists = patternAlreadyExists,
+                    Target = target,
+                    Message = patternType == "None"
+                        ? $"[dryRun] 會清除材質 '{mat.Name}' 的 {target} 表面樣式"
+                        : $"[dryRun] 會將樣式 '{plannedPatternName}'（{(patternAlreadyExists ? "重用既有" : "新建")}）套入材質 '{mat.Name}' 的 {target} 表面樣式"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"設定材質表面樣式: {mat.Name}"))
             {

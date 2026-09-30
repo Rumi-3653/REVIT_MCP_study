@@ -2,8 +2,8 @@
 name: GM_parameter-schema
 description: "綠建材資訊在 Revit BIM 模型中的參數欄位定義與綁定規範。定義 v5 Multi-Material Slot 共享參數 Schema（GreenMaterial_Mat1~Mat6_* 共 64 欄位）、資料型別、Revit 參數群組，以及 Type 層級綁定與寫入工具。"
 metadata:
-  version: "3.0"
-  updated: "2026-08-06"
+  version: "3.1"
+  updated: "2026-08-31"
   created: "2026-07-27"
   references:
     - "Revit Shared Parameter File Specification"
@@ -21,6 +21,8 @@ metadata:
 本文件定義由 TABC 綠建材採購指南擷取之建材資訊，在 Revit BIM 專案模型中掛載之標準參數名稱、資料型別、參數群組及載體綁定層級（Binding Targets）。
 
 > **v2.0 變更說明**：舊版（v1.0）定義的 `GBM_*` 7 欄位單槽位 Schema **從未被實際載入 Revit**，與現行 `GreenMaterial_SharedParams.txt`（已透過 `load_shared_parameters` 工具實際綁定）完全不同名。v2.0 改為記錄實際生效的 v4 Multi-Material Slot Schema（Mat1/Mat2/Mat3 三槽位，31 欄位），避免 AI 依舊版寫入不存在的參數名稱。
+>
+> **v3.1 變更說明**：新增第 6 節「標章效期與資料新鮮度」，把「不得寫入已失效標章」由 skill 層的散文升格為方法層規則。既有 Schema、欄位、GUID 完全未變（issue #128）。
 >
 > **v3.0 變更說明**：Scenario 3（`create_multi_layer_type` 通用多材料單一組合）允許一個 Set 有 4 個以上材料，但 v4 schema 只有 3 個槽位，超過的材料只能建立實體構造層、沒有共享參數紀錄。v3.0 新增 Mat4/Mat5/Mat6 三個槽位（欄位形狀與 Mat1/Mat2 相同，含 TVOC/Formaldehyde/CNS），共 64 欄位，讓槽位數等於材料數（上限 6）。既有 Mat1/Mat2/Mat3 的 GUID 與欄位定義完全未變，純新增、非破壞性變更。
 
@@ -107,7 +109,7 @@ Mat3 是唯一維持輕量 6 欄位形狀的槽位（沿用 v4 原始定義，�
 
 ### 2.1 雙階層欄位責任對照（TASK-005.3）
 
-`tools/green-material/archive/reports/Revit_Element_GreenMaterial_Mapping_Analysis.md` 情境 3 是 TASK-003 階段的**早期分析提案**，曾建議「Material 層存放完整參數、Type 層只存摘要字串」；本節記錄的是**實際落地並生效**的相反安排（v2.0 定案，2.1 節已明文），TASK-005.3 的驗收基準以本節為準：
+`tools/green-material/archive/reports/Revit_Element_GreenMaterial_Mapping_Analysis.md`（未隨本 repo 收編——原始 PR 分支的 `archive/` 目錄含第三方 TABC 資料，收編時整批排除，見 `tools/green-material/README.md`「`archive/` 目錄未隨本 repo 收編」一節）情境 3 是 TASK-003 階段的**早期分析提案**，曾建議「Material 層存放完整參數、Type 層只存摘要字串」；本節記錄的是**實際落地並生效**的相反安排（v2.0 定案，2.1 節已明文），TASK-005.3 的驗收基準以本節為準：
 
 | 層級 | 承載物件 | 內容 | 範例 |
 | :--- | :--- | :--- | :--- |
@@ -143,5 +145,46 @@ Mat3 是唯一維持輕量 6 欄位形狀的槽位（沿用 v4 原始定義，�
 
 ## 5. 對話互動與資源導引規範 (Showcase Link Auto-Attachment)
 
-當使用者詢問任何關於綠建材材料、Revit 共享參數 schema、標註規範或數量明細時，AI Agent 的回覆**必須於末尾自動貼出展示網頁連結**（實際檢索頁 `assets/green-material-showcase.html` 由 `/GM_update` 首次執行時生成，不隨版本庫追蹤；頁面樣板見下方連結）：
-* [綠建材動態篩選與 Revit 參數預覽 Showcase 頁面樣板](../assets/green-material-showcase.template.html)
+當使用者詢問任何關於綠建材材料、Revit 共享參數 schema、標註規範或數量明細時，AI Agent 的回覆**必須於末尾自動貼出展示網頁連結**：
+* `assets/green-material-showcase.html`（本機產生物，非版控檔；由 /GM_update 從 assets/green-material-showcase.template.html 產生，見 tools/green-material/README.md）
+
+---
+
+## 6. 標章效期與資料新鮮度 (License Validity & Data Freshness)
+
+TABC 綠建材標章有有效期限，記錄在資料庫的 `period` 欄位（格式 `115/07/09 ~ 119/07/08`，民國年）。本規範定義寫入前的效期判定與資料新鮮度要求，適用於所有把標章資訊寫進 Revit 的路徑。
+
+### 6.1 硬性規則：不得靜默寫入已失效標章
+
+**規則**：任一材料的 `period` 結束日早於執行當日時，**不得在未經使用者明確核准的情況下**將其寫入 `GreenMaterial_Mat*_CertNo` / `_ValidUntil` 或任何綠建材參數。
+
+**理由（為什麼是方法層規則，不只是便利性）**：寫入的 Type 會進入交付模型、綠建材數量明細表（第 4 節的統計用途），以及據此產出的送審文件。一個已失效的證號在這三處都會被當成有效憑證讀，錯誤會離開 BIM 團隊、進到行政程序，且不會在模型內部產生任何矛盾訊號可供事後察覺。
+
+**判定方法**：`tools/green-material/GM_generate_revit_injection_plan.py` 的 `_period_end_expired()`，以 `period` 的結束日與 `datetime.date.today()` 比較。
+
+**格式異常不視為過期**：`period` 缺漏、無 `~`、或民國年日期解析失敗時一律回傳「未過期」。把解析失敗當成過期會讓資料品質問題偽裝成合規問題，擋下實際有效的材料。這類材料在計畫報告的第 0 節會落在「效期格式無法解析，未被判定為過期」的敘述下，是明示的已知邊界，不是靜默通過。
+
+**執行分工**：
+| 層 | 責任 |
+|---|---|
+| 計畫引擎（Python） | **標記**：`generate_injection_plan()` 產出 `expiredLicenses` 清單、`hasExpiredLicense` 布林，以及每項材料的 `licenseExpired` / `licenseValidUntil` |
+| `/GM_import` | **告知**：擬訂計畫後於摘要列出過期標章，並預告 `/GM_inject` 會擋下來 |
+| `/GM_inject` | **擋下**：寫入任何 Revit 工具之前停止，列出過期清單，要求明確核准；核准後於回報與 `plannedActions` 明載哪些欄位帶著失效標章 |
+
+擬訂計畫階段刻意**不**擋——擬訂是唯讀動作，使用者要先看得到是哪幾項過期，才能決定換料或重抓資料。
+
+### 6.2 資料新鮮度：本機快照的年齡必須被讀回
+
+`tabc_master_database.json` 是本機專屬、由 `/GM_update` 從 TABC 官網抓取產生的快照（見 `tools/green-material/README.md`），可能任意舊而不會有任何徵兆。
+
+**規則**：任何依據該資料庫做判斷的流程，開始前必須讀回它的抓取時間並回報給使用者。超過 **30 天** 視為舊，應主動建議 `/GM_update`——但這是建議、不是硬擋（使用者可能正在離線環境作業，或明知資料舊仍要先看計畫形狀）。
+
+30 天的依據：TABC 標章的核發與續證是月級節奏，一個月足以涵蓋一輪異動。
+
+**時間戳兩級來源，必須明示採用了哪一級**：
+1. `tabc_master_database.meta.json` 的 `fetchedAt` —— `/GM_update` 真實抓取後寫入的**確據**。（主資料庫本身是純 JSON 陣列，沒有可放中繼資料的外層物件，故時間戳寫在旁生檔；該檔與主資料庫同樣不入版控。）
+2. 主資料庫檔案的 mtime —— 旁生檔不存在時的**推估值**。複製、rsync、還原備份都會讓它與真實抓取時間脫鉤。
+
+回報時不得把第 2 級當成第 1 級陳述。`database_freshness()` 的 `fetchedAtSource` 欄位即為此而存在。
+
+**資料庫不存在不是錯誤**：全新 clone 後本來就沒有這個檔，`/GM_update` 就是首次建立入口。應回報可執行的下一步，而非拋出檔案不存在的錯誤。

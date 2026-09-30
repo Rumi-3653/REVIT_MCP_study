@@ -14,12 +14,15 @@
 | 注入入口 | `tools/green-material/GM_apply_revit_injection_plan.py` | Injection Plan 執行入口 |
 | 本機 Showcase 服務 | `local_server.py` | 提供展示頁與 Set JSON 同步 API |
 | 共享參數驗證 | `tools/green-material/GM_validate_shared_params.py` | 驗證 `GreenMaterial_SharedParams.txt` |
+| 新鮮度／效期驗收測試 | `tools/green-material/GM_test_freshness_gate.py` | issue #128 三層（時間戳讀回／30 天門檻／過期標章硬擋）的 RED/GREEN 測試。不連網、不碰本機資料庫，全在 tempfile 合成 fixture 上跑，證號用 `GBM000000x` 佔位符。`python tools/green-material/GM_test_freshness_gate.py`，exit 0 為全過 |
 | TABC 主資料 | `tabc_master_database.json` | 綠建材標章主資料庫（本機專屬，不入庫） |
+| 抓取時間戳 | `tabc_master_database.meta.json` | 主資料庫上次真實抓取的時間與筆數（本機專屬，不入庫）。由 `GM_update_tabc_database.py` 的真實執行寫入（`--dry-run`／`--resync-html` 皆不寫），`GM_generate_revit_injection_plan.py` 的 `database_freshness()` 讀回，供 `/GM_import` 在擬訂計畫前告知使用者資料多舊；缺席時退回主資料庫檔案 mtime 的推估值 |
 | Set 工作資料 | `exported_material_sets.json` | Showcase、Agent 與 Revit 匯入流程共享狀態（本機專屬，不入庫） |
 | 產出計畫 | `Revit_Injection_Plan.json` | 最近一次產生的注入計畫（本機專屬，不入庫） |
 | 共享參數 | `tools/green-material/GreenMaterial_SharedParams.txt` | Revit v4 多材料槽位 Schema |
 | **展示頁 UI 樣板** | `assets/green-material-showcase.template.html` | 綠建材搜尋與 Set 管理 UI 的**唯一原始碼，git 追蹤**。要改 UI／JS／CSS 一律改這裡 |
 | 展示頁（產生檔） | `assets/green-material-showcase.html` | 樣板 + 本機 `tabc_master_database.json` 拼接產生，本機專屬、不入庫，請勿手動編輯 |
+| 專案看板 | `tools/green-material/GM_kanban.html` | Monstrare 專案看板；由 `/GM_kanban` 開啟，內嵌 `cardsData` 與 `tools/kanban/index.html` 互為鏡像，皆由 `tools/kanban/cards/*.json` 產生；頁內「🔗 連結專案資料夾」寫回功能靠 `getGmKanbanFileHandle()` 找到本檔案 |
 
 以上路徑均相對於 repository 根目錄。
 
@@ -47,7 +50,17 @@
 
 `exported_material_sets.json`（透過 `local_server.py` 的 `POST /api/save-sets` 寫入）是使用者個人在本機累積的材料 Set，不是專案共用資料，2026-08 起加入 `.gitignore` 並從 git 追蹤移除（檔案仍保留在本機，不會被刪除）——避免多台電腦之間透過 `git pull` 互相看到彼此儲存的 Set。每台電腦的 Set 各自獨立，不會跨機同步。
 
+### `archive/` 目錄未隨本 repo 收編
+
+原始開發分支（PR #116）另有一個 `tools/green-material/archive/` 目錄，內含財團法人臺灣建築中心（TABC）的真實綠建材認證資料片段（真實證號、公司名稱、認證起訖期間、官方網站圖片 URL）、網站頁面快照（含 `tabc_search.html`），以及開發過程中的一次性抓取／同步／診斷／維護腳本與中間 JSON。收編進本 repo 時整批刻意排除——這些內容含第三方著作與真實案件資料，不得隨本 repo 的 MIT 授權再散布。
+
+這與 `tabc_master_database.json` 那種「`.gitignore` 排除、但可在本機重新產生」的情況不同：`archive/` 從未進入本 repo 的任何一次 commit，`GM_update_tabc_database.py` 也不會、不能重建它——它不是可重新產生的本機快取，而是永久性的收編排除。
+
+**本文件與其他 domain／skill 文件中如果出現 `archive/...` 或 `tabc_search.html` 這類路徑，指的都是原始 PR 分支裡的內容，不是本 repo 檢出後可以找到的檔案。** 保留這些路徑提及，是為了給想追溯歷史脈絡的人留下線索（例如某個設計決策的早期分析依據曾經寫在哪份報告），不是宣稱該檔案存在於本 repo。下方「目錄分類」表格描述的正是原始分支 `archive/` 的內容，於本 repo 中不存在。
+
 ## 目錄分類
+
+以下各列描述的是原始開發分支 `archive/` 的內容（本 repo 未收編，見上方「`archive/` 目錄未隨本 repo 收編」一節），僅供追溯脈絡，本 repo 檢出後不存在這些路徑：
 
 | 目錄 | 保存內容 | 維護狀態 |
 |---|---|---|

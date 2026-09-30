@@ -75,6 +75,7 @@ namespace RevitMCP.Core
             JToken certifiedToken = parameters["certified"];
             JToken shadingToken = parameters["shadingCoefficient"];
             JToken acousticToken = parameters["acousticRw"];
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
 
             if (string.IsNullOrEmpty(newTypeName))
                 throw new Exception("請指定新 Type 名稱 (newTypeName)");
@@ -96,6 +97,92 @@ namespace RevitMCP.Core
                 throw new Exception($"家族 '{sourceFamily.Name}' 不可編輯（可能是系統族群），無法走 RFA 注入路徑");
 
             string categoryName = sourceFamily.FamilyCategory?.Name ?? "Unknown";
+
+            // === dryRun：本工具是 11 支寫入工具中風險最高的一支——真正的破壞性動作
+            // （備份 SaveAs、新家族 SaveAs、LoadFamily）全部發生在 EditFamily() 開出的家族
+            // 文件生命週期裡，那個生命週期橫跨 Transaction 邊界，RollBack 救不回已寫出的 .rfa
+            // 檔案。因此這裡刻意選擇最保守的做法：dryRun=true 時完全不呼叫 doc.EditFamily()、
+            // 不呼叫 Directory.CreateDirectory()、不做任何檔案系統寫入，只用「本專案文件內已
+            // 載入的既有資訊」（sourceSymbol / sourceFamily / 其餘同名 FamilySymbol）回報路徑
+            // 與欄位規劃。代價：像「這個共享參數欄位在家族裡是否已存在/會不會綁定失敗」這種
+            // 只有打開家族文件才能確定的資訊，dryRun 無法提供，只能誠實列出「無法得知」。
+            if (dryRun)
+            {
+                string plannedBackupFolder = backupFolder;
+                if (string.IsNullOrWhiteSpace(plannedBackupFolder))
+                {
+                    string docDir = string.IsNullOrEmpty(doc.PathName) ? null : Path.GetDirectoryName(doc.PathName);
+                    plannedBackupFolder = Path.Combine(string.IsNullOrEmpty(docDir) ? Path.GetTempPath() : docDir, "_rfa_backup");
+                }
+
+                string safeFamilyNameDry = SanitizeFileName(sourceFamily.Name);
+                string plannedBackupFileNamePattern = $"{safeFamilyNameDry}_backup_<yyyyMMdd_HHmmss>.rfa";
+
+                string licnoDry = mat1["certNo"]?.Value<string>();
+                string familySuffixTagDry = string.IsNullOrWhiteSpace(licnoDry) ? newFamilySuffix : $"{newFamilySuffix}_{SanitizeFileName(licnoDry)}";
+                string plannedNewFamilyFileName = $"{safeFamilyNameDry}{familySuffixTagDry}.rfa";
+                string plannedNewFamilyPath = Path.Combine(plannedBackupFolder, plannedNewFamilyFileName);
+                bool newFamilyFileAlreadyExists = File.Exists(plannedNewFamilyPath);
+
+                // best-effort：只比對「目前已載入本專案文件」的同一家族其餘 Type 名稱，
+                // 不等於家族檔案內部的完整 Type 清單（那需要 EditFamily 才能看到，dryRun 不做）。
+                var siblingTypeNames = sourceFamily.GetFamilySymbolIds()
+                    .Select(id => (doc.GetElement(id) as FamilySymbol)?.Name)
+                    .Where(n => n != null)
+                    .ToList();
+                bool typeNameCollisionBestEffort = siblingTypeNames.Contains(newTypeName);
+
+                var plannedFields = new List<string>();
+                if (identityData != null)
+                {
+                    if (!string.IsNullOrEmpty(identityData["manufacturer"]?.Value<string>())) plannedFields.Add("IdentityData.Manufacturer");
+                    if (!string.IsNullOrEmpty(identityData["model"]?.Value<string>())) plannedFields.Add("IdentityData.Model");
+                    if (!string.IsNullOrEmpty(identityData["description"]?.Value<string>())) plannedFields.Add("IdentityData.Description");
+                    if (!string.IsNullOrEmpty(identityData["url"]?.Value<string>())) plannedFields.Add("IdentityData.URL");
+                }
+
+                var mat1FieldSuffixes = new (string field, string suffix)[]
+                {
+                    ("name", "Name"), ("certNo", "CertNo"), ("category", "Category"),
+                    ("subCategory", "SubCategory"), ("applicant", "Applicant"), ("validUntil", "ValidUntil"),
+                    ("tvoc", "TVOC"), ("formaldehyde", "Formaldehyde"), ("cnsSpec", "CNSSpec"),
+                    ("testItems", "TestItems"), ("qualifiedItems", "QualifiedItems"),
+                };
+                foreach (var (field, suffix) in mat1FieldSuffixes)
+                {
+                    JToken tok = mat1[field];
+                    if (tok != null && tok.Type != JTokenType.Null)
+                        plannedFields.Add($"GreenMaterial_Mat1_{suffix}");
+                }
+
+                if (certifiedToken != null && certifiedToken.Type != JTokenType.Null)
+                    plannedFields.Add("GreenMaterial_Certified");
+                if (shadingToken != null && shadingToken.Type != JTokenType.Null)
+                    plannedFields.Add("GreenMaterial_Window_ShadingCoefficient");
+                if (acousticToken != null && acousticToken.Type != JTokenType.Null)
+                    plannedFields.Add("GreenMaterial_AcousticRw");
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    SourceTypeId = sourceTypeId,
+                    SourceTypeName = sourceSymbol.Name,
+                    SourceFamilyName = sourceFamily.Name,
+                    Category = categoryName,
+                    PlannedNewTypeName = newTypeName,
+                    PlannedNewTypeNameCollisionBestEffort = typeNameCollisionBestEffort,
+                    PlannedBackupFolder = plannedBackupFolder,
+                    PlannedBackupFileNamePattern = plannedBackupFileNamePattern,
+                    PlannedNewFamilyPath = plannedNewFamilyPath,
+                    NewFamilyFileAlreadyExists = newFamilyFileAlreadyExists,
+                    PlannedWrittenFields = plannedFields,
+                    Message = "[dryRun] 完全未開啟家族文件（沒有呼叫 EditFamily/SaveAs/LoadFamily），也沒有建立備份資料夾，保證未寫出任何 .rfa 檔案（含備份檔）。僅回報路徑與欄位規劃"
+                        + (typeNameCollisionBestEffort ? $"；警告：本專案文件內已有同名 Type '{newTypeName}'（best-effort 檢查，僅比對目前已載入本專案的 Type，家族檔案內部真正的 Type 清單需要實際執行才能確認）" : "")
+                        + (newFamilyFileAlreadyExists ? $"；警告：目標新家族檔已存在 '{plannedNewFamilyPath}'，實際執行時會直接中止" : "")
+                        + "；哪些欄位會因家族尚未綁定對應共享參數而列入 MissingParameters，需要實際執行（開啟家族文件）才能確定，dryRun 無法預先得知"
+                };
+            }
 
             // === 規則2：備份必須先於任何修改 ===
             if (string.IsNullOrWhiteSpace(backupFolder))
@@ -132,49 +219,68 @@ namespace RevitMCP.Core
                 var app = doc.Application;
                 string originalSharedParamFile = app.SharedParametersFilename;
                 DefinitionFile defFile;
+
+                // 2026-08-31 根因修正（實測：Revit 2024 / Window-Fixed-Transom，12 個
+                // GreenMaterial_* 共享參數全數新增失敗，錯誤皆為 autodesk.parameter.group:
+                // data-1.0.0: Shared parameter creation failed.）：
+                // FamilyManager.AddParameter(ExternalDefinition, ...) 需要 Application 當下
+                // 仍開著「建立該 ExternalDefinition 時所用的」共享參數檔，才能解析這個定義。
+                // 舊版把 app.SharedParametersFilename 的設定/還原包在一個只涵蓋
+                // OpenSharedParameterFile() 的小 try/finally 裡，還原發生在所有 AddParameter
+                // 呼叫（在 WriteFamilyGreenMaterialSlot / SetFamilySharedBoolParam /
+                // SetFamilySharedNumberParam 內部）之前，導致 defFile 取得的 exDef 變成懸空
+                // 參照。現在把設定的生命週期延長到涵蓋整個 Transaction（含 Commit）——
+                // 比照同一支 codebase 內已實測成功 69/69 的對照組 load_shared_parameters
+                // （CommandExecutor.GM_GreenMaterial.cs：設定→開檔→在同一個 try 內用到底→
+                // finally 才還原）。defFile/exDef 在本方法內的最後一次使用是下方 Transaction
+                // 區塊中的 SetFamilySharedNumberParam(..., "GreenMaterial_AcousticRw", ...)，
+                // 因此還原點放在 Transaction 完整 Commit 之後。
                 try
                 {
                     app.SharedParametersFilename = sharedParamFilePath;
                     defFile = app.OpenSharedParameterFile();
                     if (defFile == null)
                         throw new Exception($"無法開啟共享參數檔: {sharedParamFilePath}");
+
+                    written = new List<string>();
+                    missing = new List<string>();
+
+                    using (Transaction t = new Transaction(famDoc, $"新增綠建材 Type: {newTypeName}"))
+                    {
+                        t.Start();
+
+                        fm.CurrentType = sourceFamType;
+                        fm.NewType(newTypeName); // 只新增，絕不改動來源 Type（規則1/4）
+
+                        if (identityData != null)
+                        {
+                            SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_MANUFACTURER, identityData["manufacturer"]?.Value<string>(), written, missing, "IdentityData.Manufacturer");
+                            SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_MODEL, identityData["model"]?.Value<string>(), written, missing, "IdentityData.Model");
+                            SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_DESCRIPTION, identityData["description"]?.Value<string>(), written, missing, "IdentityData.Description");
+                            SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_URL, identityData["url"]?.Value<string>(), written, missing, "IdentityData.URL");
+                        }
+
+                        WriteFamilyGreenMaterialSlot(fm, defFile, "Mat1", mat1, written, missing);
+
+                        if (certifiedToken != null && certifiedToken.Type != JTokenType.Null)
+                            SetFamilySharedBoolParam(fm, defFile, "GreenMaterial_Certified", certifiedToken.Value<bool>(), written, missing);
+
+                        if (shadingToken != null && shadingToken.Type != JTokenType.Null)
+                            SetFamilySharedNumberParam(fm, defFile, "GreenMaterial_Window_ShadingCoefficient", shadingToken.Value<double>(), written, missing);
+                        if (acousticToken != null && acousticToken.Type != JTokenType.Null)
+                            SetFamilySharedNumberParam(fm, defFile, "GreenMaterial_AcousticRw", acousticToken.Value<double>(), written, missing);
+
+                        t.Commit();
+                    }
                 }
                 finally
                 {
                     // 無條件還原，包含原本為空字串的情況——否則執行前若為空，Revit 的全域共享
                     // 參數檔設定會被永久改成 GreenMaterial_SharedParams.txt，造成非預期的環境異動。
+                    // 還原點刻意放在涵蓋上方整個 try（含 Transaction Commit）之後，確保任何例外
+                    // 路徑（OpenSharedParameterFile 失敗、AddParameter 拋例外、Commit 失敗等）
+                    // 都會執行到這裡，同時保證還原不會發生在 defFile/exDef 最後一次使用之前。
                     app.SharedParametersFilename = originalSharedParamFile ?? string.Empty;
-                }
-
-                written = new List<string>();
-                missing = new List<string>();
-
-                using (Transaction t = new Transaction(famDoc, $"新增綠建材 Type: {newTypeName}"))
-                {
-                    t.Start();
-
-                    fm.CurrentType = sourceFamType;
-                    fm.NewType(newTypeName); // 只新增，絕不改動來源 Type（規則1/4）
-
-                    if (identityData != null)
-                    {
-                        SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_MANUFACTURER, identityData["manufacturer"]?.Value<string>(), written, missing, "IdentityData.Manufacturer");
-                        SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_MODEL, identityData["model"]?.Value<string>(), written, missing, "IdentityData.Model");
-                        SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_DESCRIPTION, identityData["description"]?.Value<string>(), written, missing, "IdentityData.Description");
-                        SetFamilyBuiltInText(fm, BuiltInParameter.ALL_MODEL_URL, identityData["url"]?.Value<string>(), written, missing, "IdentityData.URL");
-                    }
-
-                    WriteFamilyGreenMaterialSlot(fm, defFile, "Mat1", mat1, written, missing);
-
-                    if (certifiedToken != null && certifiedToken.Type != JTokenType.Null)
-                        SetFamilySharedBoolParam(fm, defFile, "GreenMaterial_Certified", certifiedToken.Value<bool>(), written, missing);
-
-                    if (shadingToken != null && shadingToken.Type != JTokenType.Null)
-                        SetFamilySharedNumberParam(fm, defFile, "GreenMaterial_Window_ShadingCoefficient", shadingToken.Value<double>(), written, missing);
-                    if (acousticToken != null && acousticToken.Type != JTokenType.Null)
-                        SetFamilySharedNumberParam(fm, defFile, "GreenMaterial_AcousticRw", acousticToken.Value<double>(), written, missing);
-
-                    t.Commit();
                 }
 
                 // === 規則4：另存為新家族檔名，迴避與來源家族同名的 LoadFamily 覆蓋歧義 ===
@@ -380,8 +486,19 @@ namespace RevitMCP.Core
             // 多載已由 AddParameter + GroupTypeId 取代），不需要版本分支。
             // 2026-08-13：GreenMaterial_Certified（YESNO）在 IdentityData 群組下 AddParameter 會失敗
             // （實測案例：Window 家族「雙開落地窗- (2)_TABC_GBM0104092」），但同一支 API 對 TEXT/NUMBER
-            // 型別的 Mat1_* 欄位在同一群組下都能成功——原因不明，保留 IdentityData 為優先嘗試（大部分
-            // 欄位、大部分家族都適用），失敗時退而改用泛用的 Data 群組，並把兩次失敗訊息都保留供除錯。
+            // 型別的 Mat1_* 欄位在同一群組下都能成功——當時記錄為「原因不明」。
+            // 2026-08-31 追查出根因（實測：Revit 2024 / Window-Fixed-Transom，12 個
+            // GreenMaterial_* 全數失敗，錯誤皆為 autodesk.parameter.group:data-1.0.0:
+            // Shared parameter creation failed.）：呼叫端（InjectGreenMaterialIntoFamily）
+            // 原本把 app.SharedParametersFilename 的還原點放在所有 AddParameter 呼叫「之前」，
+            // 這裡的 exDef 因此是懸空參照，AddParameter 對懸空 ExternalDefinition 只回傳通用
+            // 錯誤訊息，不是欄位型別或群組本身的問題。此 bug 是環境相依的——若呼叫端機器上
+            // app.SharedParametersFilename 原本就已經是同一份共享參數檔，「還原」等於沒還原，
+            // 多數欄位仍會成功，只有少數欄位（依 Revit 內部快取失效時機而定）失敗，這正是
+            // 2026-08-13 觀察到「只有 YESNO 失敗、TEXT/NUMBER 都成功」的原因。呼叫端已在
+            // 2026-08-31 修正共享參數檔設定的生命週期（延長到涵蓋整個 Transaction）。
+            // 這裡的 IdentityData → Data 雙群組 fallback 與根因無關，但本身無害，在根因修好後
+            // 仍保留作為額外防禦（例如某些家族類別確實不接受 IdentityData 群組下的特定欄位）。
             string lastError = null;
             foreach (var groupId in new[] { GroupTypeId.IdentityData, GroupTypeId.Data })
             {

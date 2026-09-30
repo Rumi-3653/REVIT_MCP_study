@@ -24,6 +24,21 @@ For a "純材料" (pure-material) Set — TASK-005.5, e.g. a single caulk/adhesi
 
 ## Steps
 
+0. **Check the local database's freshness first (never skip this).** The plan you are about to produce is only as current as `tabc_master_database.json`, which is local-only and can be months old without anything saying so. Run:
+   ```bash
+   python tools/green-material/GM_generate_revit_injection_plan.py --freshness
+   ```
+   This does no network I/O and writes nothing — it only reads the local database's age. Act on the `status` field:
+
+   | `status` | What to do |
+   |---|---|
+   | `missing` | **Stop.** Tell the user there is no local database yet and that `/GM_update` builds it from scratch (this is the fresh-clone bootstrap path, not an error). Do not attempt the plan — Step 2 would just crash on `FileNotFoundError`. |
+   | `stale` (older than `thresholdDays`, default 30) | **Tell the user before planning**: the database was fetched `fetchedAt`, `ageDays` days ago, holds `recordCount` records, and recommend running `/GM_update` first. State the consequence plainly — the plan may be based on licenses that have since expired or changed. Then **ask whether to continue anyway or update first**. If they say continue, continue; this is a recommendation, not a gate. |
+   | `fresh` | Report one line — fetched `fetchedAt`, `ageDays` days ago, `recordCount` records — and continue without asking. |
+   | `unknown` | Say the fetch time could not be determined, suggest `/GM_update` if they want certainty, and continue if they'd rather not wait. |
+
+   When `fetchedAtSource` is `"mtime"` (the database predates the sidecar timestamp file, or the sidecar was lost), say so: the age is **estimated from the file's modification time**, not from a recorded fetch. Copying, restoring a backup, or an rsync all break that estimate. Don't present an mtime-derived age as if it were a recorded fetch time.
+
 1. **Parse the text yourself** (don't write a generic parser — this input is simple enough to read directly):
    - `set_name`: the text between `【` and `】`.
    - `licnos`: all substrings matching `GBM\d+` (the parenthetical list after the Set name).
@@ -50,7 +65,9 @@ For a "純材料" (pure-material) Set — TASK-005.5, e.g. a single caulk/adhesi
 3. **Report a concise summary to the user** (do not paste the full plan JSON):
    - Set name and matched material count (flag if fewer materials matched than licnos requested — that means a licno wasn't found in the master DB even after suffix-tolerant matching).
    - For each matched material: licno (full, with any suffix), title, target Revit category, target layer (Structure/Finish1/Finish2/etc.), suggested thickness.
-   - **Wall Structure layers (TASK-005.6)**: if any item's `mappingDetails.wallUsageUnspecified` is `true`, call this out explicitly — the plan used the conservative generic default (150mm) because no wall usage (外牆/分戶牆/輕隔間) was found in the Set's Q3 補充條件 text; tell the user they can either re-run `/GM_import` with that detail added to Q3, or override the thickness directly when `/GM_inject revit` asks for confirmation. Don't silently pass this through as if it were a confident value.
+   - **Wall Structure layers (TASK-005.6)**: if any item's `mappingDetails.wallUsageUnspecified` is `true`, call this out explicitly — the plan used the conservative generic default (150mm) because no wall usage (外牆/分戶牆/輕隔間) was found in the Set's Q3 補充條件 text; tell the user they can either re-run `/GMimport` with that detail added to Q3, or override the thickness directly when `/GM_inject revit` asks for confirmation. Don't silently pass this through as if it were a confident value.
+   - **Data freshness**: restate the Step 0 result in one line (fetched date, age in days, record count) so the summary is self-contained — someone reading only the summary must be able to see what vintage of data this plan rests on.
+   - **Expired licenses (mandatory)**: if `plan['hasExpiredLicense']` is `true`, list every entry in `plan['expiredLicenses']` — licno, title, company, period — and warn that `/GM_inject revit` will stop and require explicit approval before writing them. Never omit this because the plan "otherwise looks fine".
    - The plan ID.
    - Tell the user: run `/GM_inject revit` next to actually write this Set into the currently-open Revit project.
    - **Exception**: if the plan's `pureMaterialAttachCategory` is set (non-null) and at least one item in `plan['materialsMapping']` has `mappingDetails.isAuxiliary: true`, do **not** tell the user to run `/GM_inject revit` yet — go to Step 4 first.
@@ -86,7 +103,8 @@ For a "純材料" (pure-material) Set — TASK-005.5, e.g. a single caulk/adhesi
 | No `【...】` found | Ask the user to re-paste the `/GM_import` text from the showcase modal |
 | No `GBM\d+` matches found | Ask the user to re-paste; the licno list must be in the parentheses after the Set name |
 | A licno matches nothing in `tabc_master_database.json` (even after suffix-tolerant fallback) | Report it as unmatched; don't silently drop it without telling the user |
-| `tabc_master_database.json` missing | Stop and tell the user the master database file is missing from the repo root |
+| `tabc_master_database.json` missing | Stop, but not as a bare error — this is the normal state of a fresh clone. Tell the user to run `/GM_update`, which bootstraps the database from the TABC site from scratch. (Step 0 catches this before the plan engine is ever called.) |
+| Step 0's freshness check itself fails to run | Report that you could not verify how old the local data is, and say so again in your final summary. Do not silently proceed as though the data were current. |
 | Step 4: `get_types_by_category` returns zero Types for the chosen category | Tell the user there's no existing Type of that category in the current model yet — they need to create one manually first (Scenario 5's Path A still needs a source Type to duplicate from) |
 | Step 4: user's reply isn't a valid row number from the table shown | Ask them to reply with one of the listed numbers; don't guess which one they meant |
 

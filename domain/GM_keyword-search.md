@@ -26,7 +26,7 @@ metadata:
 1. **觸發條件 (Trigger Conditions)**：
    * 當使用者於對話中提及包含 **「綠建材」** 或相關提示詞（如：`綠建材`、`綠建材標章`、`牆體綠建材`、`地坪綠建材`、`TABC綠建材`、`健康綠建材`、`高性能綠建材`、`再生綠建材`、`生態綠建材`、`綠建材採購`、`綠建材網頁`、`綠建材展示` 等）。
 2. **AI Agent 行為準則 (Agent Action Rules)**：
-   * **先詢問，不自動開啟**：回應中先顯示臺灣 TABC 全量綠建材採購指南與 Revit BIM 材料 Set 管理平台的連結（頁面樣板見 [green-material-showcase.template.html](../assets/green-material-showcase.template.html)；實際檢索頁 `assets/green-material-showcase.html` 由 `/GM_update` 首次執行時生成，不隨版本庫追蹤），並詢問使用者是否要開啟；使用者確認後才執行 `/GM_web open`（見 `.claude/skills/GM_web/SKILL.md`）。若使用者的訊息本身已是明確的開啟請求（例如直接輸入 `/GM_web open` 或「開啟綠建材檢索平台」），視為已確認，直接執行即可，不需要再多問一次。
+   * **先詢問，不自動開啟**：回應中先顯示 `assets/green-material-showcase.html`（本機產生物，非版控檔；由 /GM_update 從 assets/green-material-showcase.template.html 產生，見 tools/green-material/README.md） 的連結，並詢問使用者是否要開啟；使用者確認後才執行 `/GM_web open`（見 `.claude/skills/GM_web/SKILL.md`）。若使用者的訊息本身已是明確的開啟請求（例如直接輸入 `/GM_web open` 或「開啟綠建材檢索平台」），視為已確認，直接執行即可，不需要再多問一次。
    * **提供互動與導引**：說明使用者可在該網頁進行全量 TABC 綠建材搜尋、四大標章過濾、關鍵字高亮顯示，以及 Revit 共享參數 (Shared Parameters) 的一鍵導出。
 
 ---
@@ -50,7 +50,7 @@ metadata:
 ## 2. DATA Engine 檢索呈現邏輯
 
 1. 當使用者在對話或動態網頁中輸入任意包含「綠建材」相關關鍵字時，DATA Engine 執行：
-   * **詢問是否開啟 Showcase 網頁**：於回答中提供 [green-material-showcase 展示頁樣板](../assets/green-material-showcase.template.html) 連結，並詢問使用者是否要開啟；同意後執行 `/GM_web open`，不自動跳出。
+   * **詢問是否開啟 Showcase 網頁**：於回答中提供 `assets/green-material-showcase.html`（本機產生物，非版控檔；由 /GM_update 從 assets/green-material-showcase.template.html 產生，見 tools/green-material/README.md） 連結，並詢問使用者是否要開啟；同意後執行 `/GM_web open`，不自動跳出。
    * **包含比對 (Substring match)**：名稱/細項包含查詢字的所有真實合格案件全數列出。
    * **同義與部位擴充 (Expansion match)**：自動擴充同義詞與相關工法材料。
 2. 網頁頂部標示檢索統計 Banner：

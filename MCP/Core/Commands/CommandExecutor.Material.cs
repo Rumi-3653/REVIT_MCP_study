@@ -25,6 +25,36 @@ namespace RevitMCP.Core
         {
             string matName = parameters["materialName"]?.Value<string>() ?? "test材質";
             Document doc = _uiApp.ActiveUIDocument.Document;
+            bool dryRun = parameters["dryRun"]?.Value<bool>() ?? false;
+
+            if (dryRun)
+            {
+                Material existing = new FilteredElementCollector(doc).OfClass(typeof(Material)).Cast<Material>()
+                    .FirstOrDefault(m => m.Name.Equals(matName, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    return new
+                    {
+                        Success = true,
+                        DryRun = true,
+                        AlreadyExists = true,
+                        MaterialId = existing.Id.GetIdValue(),
+                        MaterialName = existing.Name,
+                        Message = $"[dryRun] 材質 '{existing.Name}' 已存在 (ID:{existing.Id})，實際執行時是 no-op（原邏輯不會更新既有材質），不會新建"
+                    };
+                }
+
+                return new
+                {
+                    Success = true,
+                    DryRun = true,
+                    AlreadyExists = false,
+                    PlannedMaterialName = matName,
+                    PlannedColor = new { r = 200, g = 220, b = 240 },
+                    PlannedMaterialClass = "測試類",
+                    Message = $"[dryRun] 材質 '{matName}' 尚不存在，實際執行時會複製既有材質庫中的基礎材質建立這個新 Material 並關聯獨立外觀資產"
+                };
+            }
 
             using (Transaction trans = new Transaction(doc, $"獨立建立材質: {matName}"))
             {

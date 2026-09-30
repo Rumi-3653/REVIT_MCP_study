@@ -6,7 +6,7 @@ user-invocable: true
 
 Open the green-material search & Set Manager web page (`assets/green-material-showcase.html`, served via `local_server.py` at `http://localhost:8888`).
 
-This is the single entry point for the green-material search & Set Manager page.
+This is the single entry point for the green-material search & Set Manager page. (`/GM_kanban` used to have a duplicate `search` action pointing at the same page — that branch was removed since it was fully redundant with this skill; `/GM_kanban` now only opens the project kanban board.)
 
 ## Usage
 
@@ -47,3 +47,7 @@ The green-material showcase page's Set Manager calls `POST /api/save-sets` / `GE
 | `python` / `python3` not found | Tell the user to install Python 3, or run `local_server.py` manually |
 | Browser doesn't open automatically | Give the user the direct URL to open manually: `http://localhost:8888` |
 | Page loads a 404 / "找不到 assets/green-material-showcase.html" (fresh clone, no local data yet) | `assets/green-material-showcase.html` is local-only and doesn't exist until it's been built once. Tell the user to run `/GM_update` first (it bootstraps both `tabc_master_database.json` and the showcase page from scratch on a first run), then retry `/GM_web open`. |
+
+## Reference
+
+See `.claude/skills/GM_kanban/SKILL.md` for the project kanban board opener (a separate, unrelated page).

@@ -496,27 +496,23 @@ namespace RevitMCP.Core
             var inst = doc.Create.NewFamilyInstance(Line.CreateBound(st, en), sym, bLv, StructuralType.Beam);
             if (inst == null) return;
 
-            // #90/#117 依批次角色設定結構用途：大樑/地樑→Girder、次樑/小樑→Joist。
+            // #117 依批次角色設定結構用途：大樑/地樑→Girder、次樑/小樑→Joist。
             // 對新建樑而言 INSTANCE_STRUCTURAL_USAGE_PARAM 為唯讀，須直接對 FamilyInstance.StructuralUsage 賦值。
-            // 刻意放在下方 Y/Z 對正區塊之外、且不吞例外：舊寫法把這段包進同一個 try/catch，
-            // Y/Z 設定拋出例外時會連帶讓 StructuralUsage 賦值整段被跳過且無任何紀錄。
-            // 現在獨立執行，若賦值失敗則往外拋，交由呼叫端既有的 per-beam try/catch
-            // （fail++ / errors.Add(ex.Message)）記錄，不再靜默消失。
+            // 不再吞例外：賦值失敗要讓呼叫端的 catch (Exception ex) { fail++; errors.Add(...) } 看得到。
             var usage = MapBeamRoleToUsage(beamRole);
-            if (usage.HasValue) inst.StructuralUsage = usage.Value;
-
-            try
+            if (usage.HasValue)
             {
-                var yJust = inst.get_Parameter(BuiltInParameter.Y_JUSTIFICATION);
-                if (yJust != null && !yJust.IsReadOnly) yJust.Set(1); // Center
-
-                var zOff = inst.get_Parameter(BuiltInParameter.Z_OFFSET_VALUE);
-                if (zOff != null && !zOff.IsReadOnly) zOff.Set(0.0);
-
-                var zJust = inst.get_Parameter(BuiltInParameter.Z_JUSTIFICATION);
-                if (zJust != null && !zJust.IsReadOnly) zJust.Set(0); // Top
+                inst.StructuralUsage = usage.Value;
             }
-            catch { }
+
+            var yJust = inst.get_Parameter(BuiltInParameter.Y_JUSTIFICATION);
+            if (yJust != null && !yJust.IsReadOnly) yJust.Set(1); // Center
+
+            var zOff = inst.get_Parameter(BuiltInParameter.Z_OFFSET_VALUE);
+            if (zOff != null && !zOff.IsReadOnly) zOff.Set(0.0);
+
+            var zJust = inst.get_Parameter(BuiltInParameter.Z_JUSTIFICATION);
+            if (zJust != null && !zJust.IsReadOnly) zJust.Set(0); // Top
 
             ok++;
         }

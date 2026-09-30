@@ -13,10 +13,13 @@ category/subCategory/img），與現有 tabc_master_database.json 依 licno 合�
     避免把單次網路失敗誤判成資料下架而整批刪掉。
 
 cnsSpec/testItems/qualifiedItems/productSpecFull/specList/specs/keywords 這些
-欄位不是逐筆從 TABC 詳細頁面抓取的真實試驗數據，而是沿用
+欄位不是逐筆從 TABC 詳細頁面抓取的真實試驗數據，而是沿用原始開發分支
 tools/green-material/archive/scripts/catalog/enrich_tabc_specs_database.py
-既有的「關鍵字規則模板」重新套用（見 tools/green-material/README.md）。
-新增或有異動的記錄會重新套用模板；未變動的既有記錄維持原樣，不覆寫既有欄位。
+既有的「關鍵字規則模板」重新套用。該路徑未隨本 repo 收編（原始 PR 分支的
+archive/ 目錄含第三方 TABC 資料，收編時整批排除，見 tools/green-material/
+README.md「archive/ 目錄未隨本 repo 收編」一節），本檔案延續其推論規則，
+不代表該原始腳本存在於本 repo。新增或有異動的記錄會重新套用模板；未變動
+的既有記錄維持原樣，不覆寫既有欄位。
 
 更新完成後，會用 assets/green-material-showcase.template.html（git 追蹤的 UI 樣板）
 重新產生 assets/green-material-showcase.html：把樣板裡的 `const tabcDatabase = [...]`
@@ -48,6 +51,11 @@ import urllib.request
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.dirname(os.path.dirname(SCRIPT_DIR))  # repo root (this file lives in tools/green-material/)
 DB_PATH = os.path.join(WORKSPACE, "tabc_master_database.json")
+# 抓取時間戳的旁生檔（sidecar）。主資料庫本身是一個純 JSON 陣列（`[{...}, ...]`），沒有可以
+# 放中繼資料的外層物件；把它改成帶 header 的物件會同時打斷 load_database()、_build_showcase_html()
+# 與展示頁的 `const tabcDatabase = [...]` 拼接，所以時間戳改寫在旁生檔。檔名刻意含
+# "tabc_master_database"，讓 QA/QC 閘門 3-5 的路徑樣式（子字串比對）自動涵蓋它，不必動閘門。
+DB_META_PATH = os.path.join(WORKSPACE, "tabc_master_database.meta.json")
 SHOWCASE_PATH = os.path.join(WORKSPACE, "assets", "green-material-showcase.html")
 TEMPLATE_PATH = os.path.join(WORKSPACE, "assets", "green-material-showcase.template.html")
 
@@ -326,8 +334,30 @@ def update_tabc_database(dry_run: bool = False, progress=print) -> dict:
         json.dump(merged, f, ensure_ascii=False, indent=2)
     os.replace(tmp_path, DB_PATH)
 
+    diff["metaWritten"] = _write_db_meta(diff["timestamp"], len(merged), diff["bootstrap"])
     diff["showcaseSynced"] = _sync_showcase_html(merged)
     return diff
+
+
+def _write_db_meta(fetched_at: str, record_count: int, bootstrap: bool) -> bool:
+    """把本次「真的連線抓取並寫入主資料庫」的時間戳持久化到旁生檔，供 /GM_import 讀回計算資料年齡。
+    只有真實寫入路徑會呼叫：--dry-run 不寫（沒有改動資料庫），--resync-html 也不寫（沒有連線抓取，
+    資料年齡沒有變新）。寫入失敗時回傳 False 而不拋例外——時間戳是輔助資訊，不該讓一次成功的
+    資料庫更新因為旁生檔寫不出來而失敗；讀取端（database_freshness）本來就有檔案 mtime 的退路。"""
+    meta = {
+        "fetchedAt": fetched_at,
+        "recordCount": record_count,
+        "bootstrap": bootstrap,
+        "source": "GM_update_tabc_database.py",
+    }
+    tmp_path = DB_META_PATH + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, DB_META_PATH)
+        return True
+    except OSError:
+        return False
 
 
 def resync_html_only(progress=print) -> dict:

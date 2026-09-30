@@ -143,7 +143,7 @@ AI Agent 於進行 BIM 元件建模、材料資產掛載與共享參數匯入時
 
 ## 5. 綠建材動態檢索展示網頁與關鍵字觸發詢問規範 (Interactive Web Showcase & Trigger Confirmation Rule)
 
-當使用者提及「綠建材」相關提示詞（如：`綠建材`、`綠建材標章`、`牆體綠建材`、`地坪綠建材`、`TABC綠建材`、`健康綠建材`、`高性能綠建材`、`再生綠建材`、`生態綠建材`、`綠建材採購`、`綠建材網頁` 等）時，AI Agent **不得自動開啟網頁**，而是要先詢問使用者是否要開啟臺灣 TABC 全量綠建材採購指南與 Revit BIM 材料 Set 管理平台（頁面樣板見 [green-material-showcase.template.html](../assets/green-material-showcase.template.html)；實際檢索頁 `assets/green-material-showcase.html` 由 `/GM_update` 首次執行時生成，不隨版本庫追蹤）；使用者確認後，才執行 `/GM_web open`（見 `.claude/skills/GM_web/SKILL.md`）。若使用者的訊息本身已經是明確的開啟請求（例如直接輸入 `/GM_web open` 或「開啟綠建材檢索平台」），可視為已確認，直接執行，不需要再多問一次。
+當使用者提及「綠建材」相關提示詞（如：`綠建材`、`綠建材標章`、`牆體綠建材`、`地坪綠建材`、`TABC綠建材`、`健康綠建材`、`高性能綠建材`、`再生綠建材`、`生態綠建材`、`綠建材採購`、`綠建材網頁` 等）時，AI Agent **不得自動開啟網頁**，而是要先詢問使用者是否要開啟 `assets/green-material-showcase.html`（本機產生物，非版控檔；由 /GM_update 從 assets/green-material-showcase.template.html 產生，見 tools/green-material/README.md）；使用者確認後，才執行 `/GM_web open`（見 `.claude/skills/GM_web/SKILL.md`）。若使用者的訊息本身已經是明確的開啟請求（例如直接輸入 `/GM_web open` 或「開啟綠建材檢索平台」），可視為已確認，直接執行，不需要再多問一次。
 
 ### 5.1 需求導向 3 步驟動態抓取與 Showcase 更新規範 (3-Step On-Demand Fetch & Dynamic Update Rule)
 * **核心作業流程**：
@@ -155,7 +155,7 @@ AI Agent 於進行 BIM 元件建模、材料資產掛載與共享參數匯入時
 
 ## 6. 互動對話與分析呈現流程 (Standard Execution Steps)
 
-1. **需求對照與詢問是否開啟網頁**：接收使用者綠建材需求後，先詢問是否要開啟 [green-material-showcase 展示頁樣板](../assets/green-material-showcase.template.html) 對應的檢索平台；同意後執行 `/GM_web open`。
+1. **需求對照與詢問是否開啟網頁**：接收使用者綠建材需求後，先詢問是否要開啟 `assets/green-material-showcase.html`（本機產生物，非版控檔；由 /GM_update 從 assets/green-material-showcase.template.html 產生，見 tools/green-material/README.md） 檢索平台；同意後執行 `/GM_web open`。
 2. **原網頁真實物件擷取**：撈取/精選該品類下於 TABC 原網頁真實取得 GBM 認證之廠商、建材與圖片。
 3. **資料庫更新（如需要）**：主資料庫已過期或缺漏時，透過 `/GM_update` 更新，不手動零星寫入展示網頁。
 4. **Revit 共享參數導引**：於展示網頁中提供單鍵「查看 Revit 參數」與批次匯入 Revit 共享參數選項。

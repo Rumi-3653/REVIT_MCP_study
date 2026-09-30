@@ -64,7 +64,7 @@ Mention to the user (don't block on it) that this compares against the **local**
 | Error | Response |
 |-------|----------|
 | `exported_material_sets.json` has zero Sets | Report there's nothing to compare; suggest building a Set via `/GM_web open` first. |
-| `tabc_master_database.json` missing | Stop and tell the user the master database file is missing; suggest `/GM_update` won't help either since that only merges into an existing file — this needs manual recovery. |
+| `tabc_master_database.json` missing | Stop and tell the user to run `/GM_update` — it treats a missing database as empty and does a full import, so it is the recovery path, not a dead end. (This row previously claimed `/GM_update` could not help because it only merged into an existing file; that stopped being true once `update_tabc_database()` gained the bootstrap path.) |
 | Named Set not found (in `compare <Set 名稱>`) | List the actual Set names from `exported_material_sets.json` and ask the user to pick one, or re-check spelling. |
 | `KeyError` from `compare_and_refresh_set()` | Same as above — the Set name didn't resolve; don't retry blindly. |
 | A Set has `missing` licnos | Never silently drop them from the Set's `items` — report them and let the user decide (they may want to remove the item, or it may be a temporary site glitch resolved by re-running `/GM_update`). |
