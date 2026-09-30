@@ -738,6 +738,9 @@ namespace RevitMCP.Core
                     case "calculate_selected_detail_line_perimeter":
                         result = CalculateSelectedDetailLinePerimeter(parameters);
                         break;
+                    case "calculate_concrete_quantity":
+                        result = CalculateConcreteQuantity(parameters);
+                        break;
                     case "analyze_tall_partition_rooms":
                         result = AnalyzeTallPartitionRooms(parameters);
                         break;
