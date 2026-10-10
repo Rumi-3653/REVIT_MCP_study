@@ -41,6 +41,7 @@ namespace RevitMCP.Commands
                         "（連上後可在「MCP 設定」查看目前佔用連線的客戶端）");
                 }
 
+                RibbonStatus.Refresh();
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -180,7 +181,6 @@ namespace RevitMCP.Commands
 
                 settings.PreferredClient = chosen;
                 Configuration.ConfigManager.Instance.SaveSettings();
-                if (Application.ClientButton != null) Application.ClientButton.ItemText = ButtonText(chosen);
                 Logger.Info("使用者指定 AI 客戶端: " + chosen);
 
                 string note = "";
@@ -199,6 +199,7 @@ namespace RevitMCP.Commands
                     note = "\n\n（MCP 服務目前未啟動，記得按「MCP 服務(開/關)」。）";
                 }
 
+                RibbonStatus.Refresh();
                 TaskDialog.Show("指定 AI 客戶端", "已設定為：" + ButtonText(chosen).Replace("\n", " ") + note);
                 return Result.Succeeded;
             }

@@ -13,7 +13,6 @@ namespace RevitMCP
 
         public static SocketService SocketService => _socketService;
         public static UIApplication UIApp => _uiApp;
-        public static PushButton ClientButton { get; private set; }
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -37,7 +36,7 @@ namespace RevitMCP
                     assemblyPath,
                     "RevitMCP.Commands.ToggleServiceCommand");
                 toggleButtonData.ToolTip = "啟動或停止 MCP WebSocket 服務";
-                panel.AddItem(toggleButtonData);
+                RibbonStatus.ToggleButton = panel.AddItem(toggleButtonData) as PushButton;
 
                 // 2. 開啟日誌按鈕
                 PushButtonData logButtonData = new PushButtonData(
@@ -73,7 +72,11 @@ namespace RevitMCP
                     assemblyPath,
                     "RevitMCP.Commands.SelectClientCommand");
                 clientButtonData.ToolTip = "指定只讓 Claude 或 Codex 連入 Revit（另一邊會被拒絕），或不限（先到先用）";
-                ClientButton = panel.AddItem(clientButtonData) as PushButton;
+                RibbonStatus.ClientButton = panel.AddItem(clientButtonData) as PushButton;
+
+                // 紅綠燈與 AI 圖示：先畫一次，之後 Revit 閒置時每秒同步（連線進出也會反映）
+                RibbonStatus.Refresh();
+                application.Idling += RibbonStatus.OnIdling;
 
                 // 初始化 ExternalEventManager (必須在 UI 執行緒建立)
                 _ = ExternalEventManager.Instance;
