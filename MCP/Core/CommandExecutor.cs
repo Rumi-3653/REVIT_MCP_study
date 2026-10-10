@@ -238,6 +238,66 @@ namespace RevitMCP.Core
                     case "get_active_view":
                         result = GetActiveView();
                         break;
+
+                    case "capture_view_image":
+                        result = CaptureViewImage(parameters);
+                        break;
+
+                    case "list_fill_patterns":
+                        result = ListFillPatterns(parameters);
+                        break;
+
+                    case "get_view_range":
+                        result = GetViewRange(parameters);
+                        break;
+
+                    case "get_camera_info":
+                        result = GetCameraInfo(parameters);
+                        break;
+
+                    case "get_material_graphics":
+                        result = GetMaterialGraphics(parameters);
+                        break;
+
+                    case "set_material_graphics":
+                        result = SetMaterialGraphics(parameters);
+                        break;
+
+                    case "set_view_range":
+                        result = SetViewRange(parameters);
+                        break;
+
+                    case "get_link_display_settings":
+                        result = GetLinkDisplaySettings(parameters);
+                        break;
+
+                    case "set_link_display_settings":
+                        result = SetLinkDisplaySettings(parameters);
+                        break;
+
+                    case "list_open_documents":
+                        result = ListOpenDocuments();
+                        break;
+
+                    case "open_document":
+                        result = OpenDocument(parameters);
+                        break;
+
+                    case "save_document":
+                        result = SaveDocument(parameters);
+                        break;
+
+                    case "reload_links":
+                        result = ReloadLinks(parameters);
+                        break;
+
+                    case "close_document":
+                        result = CloseDocument(parameters);
+                        break;
+
+                    case "get_view_graphics_diagnostics":
+                        result = GetViewGraphicsDiagnostics(parameters);
+                        break;
                     
                     case "rename_view":
                         result = RenameView(parameters);
@@ -570,6 +630,9 @@ namespace RevitMCP.Core
                     case "align_view_cropbox_to_element":
                         result = AlignViewCropBoxToElement(parameters);
                         break;
+                    case "set_3d_section_box":
+                        result = Set3DSectionBox(parameters);
+                        break;
                     case "shift_view_cropbox":
                         result = ShiftViewCropBox(parameters);
                         break;
@@ -584,6 +647,17 @@ namespace RevitMCP.Core
                         break;
                     case "set_category_visibility":
                         result = SetCategoryVisibility(parameters);
+                        break;
+
+                    // === 視圖篩選器（規則式表現法控制）===
+                    case "get_filterable_parameters":
+                        result = GetFilterableParameters(parameters);
+                        break;
+                    case "create_view_filter":
+                        result = CreateViewFilter(parameters);
+                        break;
+                    case "remove_view_filter":
+                        result = RemoveViewFilter(parameters);
                         break;
 
                     // === 尺寸標註模組 ===
