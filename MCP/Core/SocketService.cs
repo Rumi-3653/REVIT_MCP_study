@@ -292,19 +292,51 @@ namespace RevitMCP.Core
                 return (false, null);
             }
 
+            CloseThenAbort(toClose, "switched");
+
+            Logger.Info("[Socket] 使用者釋放連線: " + prev + ". 下一個重連的客戶端將取得鎖。");
+            return (true, prev);
+        }
+
+        /// <summary>
+        /// 先送 close frame 再 Abort()。
+        /// 只 Abort() 的話 HttpListener 不會通知對方：node 客戶端的 TCP 半開、readyState 仍是 OPEN，
+        /// 要到下次送命令才發現（先卡 30 秒逾時，之後每 5 秒重連被 409）——這就是「切換不乾淨」的根因
+        /// （log 實證：釋放後對方 13 分鐘沒有任何重連紀錄）。
+        /// 不能用 CloseAsync：它要等對方回 close frame，會和 receive task 的 ReceiveAsync 相撞；
+        /// CloseOutputAsync 只送不等，可與 ReceiveAsync 並存。它算一次送出，拿 _sendLock 避免和
+        /// SendResponseAsync 交錯。reason 原樣送到客戶端，node 端據此決定不自動重連。
+        /// 丟到 thread pool 跑再等，避免在 Revit UI 執行緒上 .Wait() 同步內容死鎖。
+        /// </summary>
+        private void CloseThenAbort(WebSocket ws, string reason)
+        {
             try
             {
-                // 必須用 Abort()，不能用 CloseAsync：CloseAsync 需要等待對方回應 close frame，
-                // 會和 receive task 既有的 ReceiveAsync 相撞，拋出「already one outstanding receive」例外。
-                toClose.Abort();
+                if (ws.State == WebSocketState.Open && _sendLock.Wait(500))
+                {
+                    try
+                    {
+                        Task.Run(() => ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, reason, CancellationToken.None)).Wait(1000);
+                    }
+                    finally
+                    {
+                        _sendLock.Release();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug("[Socket] 送出 close frame 失敗(改走 Abort): " + ex.Message);
+            }
+
+            try
+            {
+                ws.Abort();
             }
             catch (Exception ex)
             {
                 Logger.Debug("[Socket] Abort 期間例外(可忽略): " + ex.Message);
             }
-
-            Logger.Info("[Socket] 使用者釋放連線: " + prev + ". 下一個重連的客戶端將取得鎖。");
-            return (true, prev);
         }
 
         /// <summary>
@@ -339,7 +371,12 @@ namespace RevitMCP.Core
 
                             if (result.MessageType == WebSocketMessageType.Close)
                             {
-                                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", cancellationToken);
+                                // 對方先關才需要回 close frame 完成握手；若是我們先送了 close frame
+                                // （CloseThenAbort），狀態已不是 CloseReceived，再 CloseAsync 會丟例外。
+                                if (socket.State == WebSocketState.CloseReceived)
+                                {
+                                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", cancellationToken);
+                                }
                                 Logger.Info("[Socket] MCP Server 已斷線");
                                 return;
                             }
@@ -465,11 +502,10 @@ namespace RevitMCP.Core
 
             try
             {
-                // 先取消所有背景任務
-                _cancellationTokenSource?.Cancel();
-
-                // 釋放連線鎖定 (只 Abort，不 CloseAsync/Dispose —— 交給 receive task 的 finally
-                // 處理 Dispose，維持單一 disposer 原則)
+                // 釋放連線鎖定：先送 close frame 讓客戶端立刻知道，再 Abort（不 CloseAsync/Dispose ——
+                // 交給 receive task 的 finally 處理 Dispose，維持單一 disposer 原則）。
+                // 必須在 Cancel() 之前：取消會讓 receive loop 先把 socket Dispose 掉，close frame 就送不出去，
+                // 客戶端又變半開殭屍連線。
                 WebSocket ws;
                 lock (_connectionLock)
                 {
@@ -482,14 +518,11 @@ namespace RevitMCP.Core
 
                 if (ws != null)
                 {
-                    try
-                    {
-                        ws.Abort();
-                    }
-                    catch
-                    {
-                    }
+                    CloseThenAbort(ws, "service-stopped");
                 }
+
+                // 再取消所有背景任務
+                _cancellationTokenSource?.Cancel();
 
                 // 停止 HttpListener
                 if (_httpListener != null && _httpListener.IsListening)
