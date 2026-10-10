@@ -114,6 +114,22 @@ export class RevitSocketClient {
     }
 
     /**
+     * 把連線錯誤翻成可行動的訊息。localhost 拒絕連線時 Node 丟的是 message 為空字串的
+     * AggregateError（::1 與 127.0.0.1 各失敗一次），原樣回傳會讓 AI client 只看到 "Error: "。
+     */
+    static describeConnectError(error: any): Error {
+        const codes = [error?.code, ...(error?.errors ?? []).map((e: any) => e?.code)];
+        const msg = String(error?.message ?? '');
+        if (codes.includes('ECONNREFUSED')) {
+            return new Error('Revit 的 MCP 服務沒有開（port 8964 拒絕連線）。請開啟 Revit，到「增益集 → MCP Tools」按「MCP 服務(開/關)」。');
+        }
+        if (msg.includes('409')) {
+            return new Error('Revit 拒絕這個 AI 連入（HTTP 409）：可能另一個 AI 正占著連線，或「AI 客戶端」按鈕選的是另一邊。請檢查「AI 客戶端」按鈕，或按「切換/釋放連線」。');
+        }
+        return error instanceof Error && msg ? error : new Error(msg || String(error) || '未知的 WebSocket 連線錯誤');
+    }
+
+    /**
      * 實際建立一條連線。只由 connect() 呼叫，重複連線的防護在 connect()。
      */
     private openSocket(): Promise<void> {
@@ -172,7 +188,7 @@ export class RevitSocketClient {
             this.ws.on('error', (error) => {
                 clearTimeout(connectTimeout);
                 console.error('[Socket] WebSocket Error:', error);
-                reject(error);
+                reject(RevitSocketClient.describeConnectError(error));
             });
 
             this.ws.on('close', () => {
