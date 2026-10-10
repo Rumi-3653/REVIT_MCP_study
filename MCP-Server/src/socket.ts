@@ -141,6 +141,8 @@ export class RevitSocketClient {
 
             this.ws = new WebSocket(wsUrl);
             const socket = this.ws;
+            // 握手是否曾成功——決定斷線後要不要自動重連（握手失敗的 409／拒絕連線不重連）。
+            let opened = false;
 
             // 連線逾時 timer。三個出口（open/error/close）都要清掉，
             // 否則每 5 秒一次的重連會持續堆疊短命 timer 白白喚醒 event loop。
@@ -156,6 +158,7 @@ export class RevitSocketClient {
 
             this.ws.on('open', () => {
                 clearTimeout(connectTimeout);
+                opened = true;
                 console.error('[Socket] Connected to Revit Plugin');
                 resolve();
             });
@@ -191,21 +194,36 @@ export class RevitSocketClient {
                 reject(RevitSocketClient.describeConnectError(error));
             });
 
-            this.ws.on('close', () => {
+            this.ws.on('close', (code: number, reasonBuf: Buffer) => {
                 clearTimeout(connectTimeout);
-                console.error('[Socket] Connection closed');
+                const reason = reasonBuf ? reasonBuf.toString() : '';
+                console.error(`[Socket] Connection closed (code=${code}${reason ? `, reason=${reason}` : ''})`);
                 // 只有「關掉的正是目前這條」才清空參照。否則會把後來建立的
                 // 有效連線誤清成 null。
                 if (this.ws === socket) {
                     this.ws = null;
                 }
 
+                // 等待中的命令立刻失敗，不要掛到 30 秒逾時。
+                this.failPending(reason === 'switched'
+                    ? 'Revit 已切換到另一個 AI 客戶端，這條連線被中斷。'
+                    : reason === 'service-stopped'
+                        ? 'Revit 的 MCP 服務已停止。'
+                        : `Revit 連線已中斷 (code=${code})`);
+
                 // 使用者主動斷線就不要再自動連回來 —— 那會把 Revit 的獨占鎖搶回來。
                 if (this.intentionalClose) {
                     return;
                 }
 
-                // Reconnect logic —— 單例 timer，排新的之前先清掉舊的，
+                // 被 Revit 端主動踢掉（使用者切換 AI 客戶端／停止服務；reason 由 SocketService.CloseThenAbort 帶來）
+                // 或握手根本沒成功（409／拒絕連線）：不自動重連，下一次工具呼叫由 index.ts 懶連線再試。
+                // 否則被踢的客戶端會每 5 秒硬敲一次 409 永不停歇，「不限」模式下還可能在對方連上前把鎖搶回去。
+                if (!opened || reason === 'switched' || reason === 'service-stopped') {
+                    return;
+                }
+
+                // Reconnect logic（只剩「連著連著意外斷掉」這一種情況）—— 單例 timer，排新的之前先清掉舊的，
                 // 避免多個 timer 疊加後彼此覆寫 socket 參照。
                 if (this.reconnectTimer) {
                     clearTimeout(this.reconnectTimer);
@@ -248,8 +266,10 @@ export class RevitSocketClient {
                 }
             });
 
-            // Send command
-            this.ws?.send(JSON.stringify(command));
+            // Send command；送出層就失敗（socket 已死）立刻讓這筆命令失敗，不要等 30 秒逾時
+            this.ws?.send(JSON.stringify(command), (err) => {
+                if (err) this.failPending(`送出命令失敗：${err.message}`, requestId);
+            });
 
             // Request Timeout
             setTimeout(() => {
@@ -259,6 +279,17 @@ export class RevitSocketClient {
                 }
             }, timeoutMs); // default 30 seconds; cross-document commands pass a longer value
         });
+    }
+
+    /**
+     * 讓等待中的命令立刻失敗（連線關閉／送出失敗時）。不傳 onlyRequestId 就全部。
+     */
+    private failPending(reason: string, onlyRequestId?: string): void {
+        for (const [id, handler] of Array.from(this.responseHandlers.entries())) {
+            if (onlyRequestId && id !== onlyRequestId) continue;
+            this.responseHandlers.delete(id);
+            handler({ success: false, error: reason, requestId: id });
+        }
     }
 
     /**

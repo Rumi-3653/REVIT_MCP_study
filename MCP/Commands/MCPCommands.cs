@@ -142,6 +142,9 @@ namespace RevitMCP.Commands
     [Transaction(TransactionMode.Manual)]
     public class SelectClientCommand : IExternalCommand
     {
+        private static string Label(string preferred) =>
+            preferred == "claude" ? "Claude" : preferred == "codex" ? "Codex" : "任一 AI";
+
         public static string ButtonText(string preferred)
         {
             switch (preferred)
@@ -191,7 +194,16 @@ namespace RevitMCP.Commands
                     if (locked && !settings.IsClientAllowed(clientName))
                     {
                         svc.SwitchConnection();
-                        note = "\n\n已中斷目前的 " + (clientName ?? "unknown") + " 連線。";
+                        note = "\n\n已中斷 " + (clientName ?? "unknown") + " 的連線（它不會自動重連）。\n"
+                             + Label(chosen) + " 會在下一次呼叫工具時自動連上，燈號屆時才會出現白點。";
+                    }
+                    else if (locked)
+                    {
+                        note = "\n\n目前連線的 " + (clientName ?? "unknown") + " 就是允許的客戶端，連線維持不變。";
+                    }
+                    else
+                    {
+                        note = "\n\n目前沒有 AI 連線；" + Label(chosen) + " 會在下一次呼叫工具時連上。";
                     }
                 }
                 else
