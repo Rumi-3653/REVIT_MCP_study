@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -129,6 +129,83 @@ namespace RevitMCP.Commands
             {
                 message = ex.Message;
                 TaskDialog.Show("錯誤", "切換/釋放連線失敗: " + ex.Message);
+                return Result.Failed;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 指定允許連入的 AI 客戶端。選定後若目前連線的是另一個客戶端，立即釋放它，
+    /// 讓指定的客戶端在下次呼叫工具時取得連線；被排除的客戶端重連會收到 409。
+    /// </summary>
+    [Transaction(TransactionMode.Manual)]
+    public class SelectClientCommand : IExternalCommand
+    {
+        public static string ButtonText(string preferred)
+        {
+            switch (preferred)
+            {
+                case "claude": return "AI 客戶端\n(Claude)";
+                case "codex": return "AI 客戶端\n(Codex)";
+                default: return "AI 客戶端\n(不限)";
+            }
+        }
+
+        public Result Execute(
+            ExternalCommandData commandData,
+            ref string message,
+            ElementSet elements)
+        {
+            try
+            {
+                var settings = Configuration.ConfigManager.Instance.Settings;
+                var dialog = new TaskDialog("指定 AI 客戶端")
+                {
+                    MainInstruction = "要讓哪個 AI 連 Revit？",
+                    MainContent = "目前：" + ButtonText(settings.PreferredClient).Replace("\n", " "),
+                    CommonButtons = TaskDialogCommonButtons.Cancel
+                };
+                dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Claude", "只允許 Claude Code / Claude Desktop 連入");
+                dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Codex", "只允許 Codex 連入");
+                dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink3, "不限", "先連上的先用（原本行為）");
+
+                string chosen;
+                switch (dialog.Show())
+                {
+                    case TaskDialogResult.CommandLink1: chosen = "claude"; break;
+                    case TaskDialogResult.CommandLink2: chosen = "codex"; break;
+                    case TaskDialogResult.CommandLink3: chosen = "any"; break;
+                    default: return Result.Cancelled;
+                }
+
+                settings.PreferredClient = chosen;
+                Configuration.ConfigManager.Instance.SaveSettings();
+                if (Application.ClientButton != null) Application.ClientButton.ItemText = ButtonText(chosen);
+                Logger.Info("使用者指定 AI 客戶端: " + chosen);
+
+                string note = "";
+                var svc = Application.SocketService;
+                if (svc != null && svc.IsRunning)
+                {
+                    var (locked, clientName, _, _) = svc.GetStatusSnapshot();
+                    if (locked && !settings.IsClientAllowed(clientName))
+                    {
+                        svc.SwitchConnection();
+                        note = "\n\n已中斷目前的 " + (clientName ?? "unknown") + " 連線。";
+                    }
+                }
+                else
+                {
+                    note = "\n\n（MCP 服務目前未啟動，記得按「MCP 服務(開/關)」。）";
+                }
+
+                TaskDialog.Show("指定 AI 客戶端", "已設定為：" + ButtonText(chosen).Replace("\n", " ") + note);
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                TaskDialog.Show("錯誤", "指定 AI 客戶端失敗: " + ex.Message);
                 return Result.Failed;
             }
         }

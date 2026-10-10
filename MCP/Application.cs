@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Autodesk.Revit.UI;
 using System.Reflection;
 using RevitMCP.Core;
@@ -13,6 +13,7 @@ namespace RevitMCP
 
         public static SocketService SocketService => _socketService;
         public static UIApplication UIApp => _uiApp;
+        public static PushButton ClientButton { get; private set; }
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -64,6 +65,15 @@ namespace RevitMCP
                     "RevitMCP.Commands.SwitchConnectionCommand");
                 switchButtonData.ToolTip = "關閉目前連線，讓下一個重新連線的 MCP 客戶端取得連線（無法指定特定客戶端）";
                 panel.AddItem(switchButtonData);
+
+                // 5. 指定 AI 客戶端（不限 / Claude / Codex）
+                PushButtonData clientButtonData = new PushButtonData(
+                    "MCPClient",
+                    Commands.SelectClientCommand.ButtonText(ConfigManager.Instance.Settings.PreferredClient),
+                    assemblyPath,
+                    "RevitMCP.Commands.SelectClientCommand");
+                clientButtonData.ToolTip = "指定只讓 Claude 或 Codex 連入 Revit（另一邊會被拒絕），或不限（先到先用）";
+                ClientButton = panel.AddItem(clientButtonData) as PushButton;
 
                 // 初始化 ExternalEventManager (必須在 UI 執行緒建立)
                 _ = ExternalEventManager.Instance;
