@@ -92,5 +92,61 @@ export const viewCreationTools: Tool[] = [
             },
             required: []
         }
+    },
+    {
+        name: "create_callout_view",
+        description: "在父視圖（平面/剖面/立面/詳圖）上建立詳圖索引（Callout）視圖，作為大樣圖的起點。範圍二選一：minPoint/maxPoint（模型座標 mm，會投影到父視圖平面取矩形）或 elementIds（取元素 BoundingBox 外擴 paddingMm）。可指定詳圖類型、比例、名稱、視圖樣版。寫入在 Transaction 內、可 Undo；dryRun=true 只回傳將建立的範圍。觸發條件：使用者提到詳圖索引、callout、大樣、局部放大、出大樣圖。",
+        inputSchema: {
+            type: "object",
+            properties: {
+                parentViewId: {
+                    type: "number",
+                    description: "父視圖 ElementId；省略則用作用中視圖。必須是平面、剖面、立面或詳圖視圖"
+                },
+                minPoint: {
+                    type: "object",
+                    description: "範圍角點一（模型座標 mm）。與 maxPoint 成對，和 elementIds 二擇一。平面視圖只看 x/y",
+                    properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } },
+                    required: ["x", "y"]
+                },
+                maxPoint: {
+                    type: "object",
+                    description: "範圍角點二（模型座標 mm）",
+                    properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } },
+                    required: ["x", "y"]
+                },
+                elementIds: {
+                    type: "array",
+                    items: { type: "number" },
+                    description: "以這些元素的 BoundingBox 聯集決定範圍（與 minPoint/maxPoint 二擇一）"
+                },
+                paddingMm: {
+                    type: "number",
+                    description: "elementIds 模式的外擴距離（mm），預設 300",
+                    default: 300
+                },
+                viewFamilyTypeName: {
+                    type: "string",
+                    description: "詳圖索引的視圖類型名稱（精確匹配）；省略則用第一個 Detail 類型"
+                },
+                scale: {
+                    type: "number",
+                    description: "比例分母，例如 20 代表 1:20；省略則沿用 Revit 預設"
+                },
+                viewName: {
+                    type: "string",
+                    description: "新視圖名稱；重名時自動加序號"
+                },
+                viewTemplateName: {
+                    type: "string",
+                    description: "要套用的視圖樣版名稱（精確匹配，選填）"
+                },
+                dryRun: {
+                    type: "boolean",
+                    description: "true 時只回傳將建立的範圍，不寫入模型。預設 false"
+                }
+            },
+            required: []
+        }
     }
 ];

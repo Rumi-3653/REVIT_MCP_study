@@ -489,6 +489,9 @@ namespace RevitMCP.Core
                     case "create_floor_plans_from_template":
                         result = CreateFloorPlansFromTemplate(parameters);
                         break;
+                    case "create_callout_view":
+                        result = CreateCalloutView(parameters);
+                        break;
                     case "batch_apply_view_template":
                         result = BatchApplyViewTemplate(parameters);
                         break;
