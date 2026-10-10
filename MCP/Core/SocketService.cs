@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
@@ -176,6 +176,18 @@ namespace RevitMCP.Core
                             continue;
                         }
 
+                        // 使用者在功能區指定了 AI 客戶端（Claude / Codex）時，其他客戶端一律 409，
+                        // 放在鎖定檢查之前：非指定客戶端連鎖都不該碰到。
+                        string incomingClient = context.Request.QueryString["client"];
+                        if (!_settings.IsClientAllowed(incomingClient))
+                        {
+                            var remoteEndPoint = context.Request.RemoteEndPoint;
+                            context.Response.StatusCode = 409;
+                            context.Response.Close();
+                            RateLimitedRejectLog(remoteEndPoint, "非指定客戶端 " + (incomingClient ?? "unknown") + "，目前只允許 " + _settings.PreferredClient);
+                            continue;
+                        }
+
                         bool locked;
                         lock (_connectionLock)
                         {
@@ -233,13 +245,13 @@ namespace RevitMCP.Core
         /// <summary>
         /// 限流記錄拒絕連線的 log，避免 client 每 5 秒重連造成洗版。
         /// </summary>
-        private void RateLimitedRejectLog(System.Net.IPEndPoint remote)
+        private void RateLimitedRejectLog(System.Net.IPEndPoint remote, string reason = "連線已被鎖定")
         {
             var now = DateTime.UtcNow;
             if ((now - _lastRejectLogUtc).TotalSeconds >= 30)
             {
                 _lastRejectLogUtc = now;
-                Logger.Info("[Socket] 已拒絕重複連線 (連線已被鎖定, 409) 來源: " + remote + ". 後續拒絕將靜默 30 秒。");
+                Logger.Info("[Socket] 已拒絕連線 (" + reason + ", 409) 來源: " + remote + ". 後續拒絕將靜默 30 秒。");
             }
         }
 

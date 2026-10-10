@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace RevitMCP.Configuration
 {
@@ -53,6 +53,20 @@ namespace RevitMCP.Configuration
         /// 逃生旗標，關閉後回退成舊行為 (新連線直接覆蓋)。
         /// </summary>
         public bool ExclusiveLock { get; set; } = true;
+
+        /// <summary>
+        /// 指定允許連入的 AI 客戶端："any"（不限，先到先用）/ "claude" / "codex"。
+        /// 以 node MCP server 帶入的 ?client=&lt;clientInfo.name&gt; 做不分大小寫的包含比對
+        /// （claude-code、claude-ai 都算 claude）。不符者在 handshake 階段回 409。
+        /// </summary>
+        public string PreferredClient { get; set; } = "any";
+
+        public bool IsClientAllowed(string clientName)
+        {
+            if (string.IsNullOrEmpty(PreferredClient) || PreferredClient == "any") return true;
+            return !string.IsNullOrEmpty(clientName)
+                && clientName.IndexOf(PreferredClient, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
 
         /// <summary>
         /// 驗證並修正設定值。回傳 true 表示有修正（需存檔）。
