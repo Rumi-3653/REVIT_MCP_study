@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill 新手手冊 · BIM_MCP</title>
+<meta property="og:title" content="Revit MCP Skill 新手使用手冊">
+<meta property="og:description" content="給第一次接觸 Revit MCP 的人：Skill 是什麼、開始前的三個綠燈、兩種叫出 Skill 的方法、一次完整執行會經過什麼、61 個 Skill 地圖、常用情境手把手、出問題怎麼分流。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;600;700;800&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../nav.css">
+<style>
+  /* ---- 圖解（inline SVG）---- */
+  .fig{margin:var(--gap-md) 0;border:1px solid var(--border);border-radius:var(--radius-md);padding:18px 18px 14px;background:var(--bg-elevated)}
+  .fig svg{display:block;width:100%;height:auto;color:var(--text-primary)}
+  .fig figcaption{font-size:13px;color:var(--text-muted);margin-top:10px;line-height:1.7}
+  .fig text{font-family:var(--font-tech);font-size:12px;fill:currentColor;letter-spacing:.5px}
+  .fig text.zh{font-family:var(--font-sans);letter-spacing:0}
+  .fig text.small{font-size:11px;fill:var(--text-muted)}
+  .fig text.tiny{font-size:10px;fill:var(--text-faint)}
+  .fig text.t-acc{fill:var(--accent)}
+  .fig text.t-ok{fill:var(--ok)}
+  .fig text.t-warn{fill:var(--warn)}
+  .fig text.t-bad{fill:var(--bad)}
+  .fig .box{fill:var(--bg-card);stroke:currentColor;stroke-width:1.5}
+  .fig .box-acc{fill:var(--accent-bg);stroke:var(--accent);stroke-width:2}
+  .fig .box-dim{fill:none;stroke:var(--border-strong);stroke-width:1}
+  .fig .line{stroke:currentColor;stroke-width:1.5;fill:none}
+  .fig .line-acc{stroke:var(--accent);stroke-width:2;fill:none}
+  .fig .line-dim{stroke:var(--border-strong);stroke-width:1;fill:none}
+  .fig .dash{stroke-dasharray:5 4}
+
+  /* ---- 步驟清單 ---- */
+  .bim-steps{counter-reset:step;list-style:none;padding:0;margin:var(--gap-sm) 0}
+  .bim-steps li{counter-increment:step;margin:0 0 12px;padding:16px 20px 16px 62px;border:1px solid var(--border);border-radius:var(--radius-md);position:relative;background:var(--bg-card)}
+  .bim-steps li:before{content:counter(step);position:absolute;left:18px;top:16px;width:28px;height:28px;display:grid;place-items:center;background:var(--accent);color:#000;border-radius:50%;font-family:var(--font-tech);font-weight:700}
+  .bim-steps li strong{display:block;margin-bottom:4px;color:var(--text-primary)}
+  .bim-steps li p{font-size:13px;margin:6px 0 0;color:var(--text-muted);line-height:1.7}
+
+  /* ---- 對話示意 ---- */
+  .chat{display:flex;flex-direction:column;gap:10px;margin:var(--gap-sm) 0}
+  .chat .msg{max-width:88%;padding:12px 16px;border-radius:var(--radius-md);font-size:14px;line-height:1.7;border:1px solid var(--border)}
+  .chat .you{align-self:flex-end;background:var(--accent-bg);border-color:var(--accent-border)}
+  .chat .ai{align-self:flex-start;background:var(--bg-card)}
+  .chat .who{display:block;font-family:var(--font-tech);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-faint);margin-bottom:4px}
+  .chat .ai code{font-size:12px}
+
+  /* ---- 綠燈檢查卡 ---- */
+  .light-card{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start}
+  .light{width:28px;height:28px;border-radius:50%;margin-top:4px;border:2px solid var(--border-strong)}
+  .light.ok{background:var(--ok);border-color:var(--ok)}
+
+  /* ---- Skill 地圖表格 ---- */
+  .skill-table td:first-child{white-space:nowrap}
+  .skill-table code{font-size:12px}
+  .star{color:var(--warn);font-size:12px;margin-left:4px}
+  .cat-head{font-family:var(--font-tech);font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin:var(--gap-lg) 0 var(--gap-xs);padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .say{color:var(--text-secondary)}
+  .say:before{content:"「";color:var(--text-faint)}
+  .say:after{content:"」";color:var(--text-faint)}
+
+  /* ---- 情境卡 ---- */
+  .scn{margin-bottom:var(--gap-md)}
+  .scn h4{margin:0 0 10px}
+  .scn dl{display:grid;grid-template-columns:92px 1fr;gap:6px 14px;margin:0;font-size:14px;line-height:1.7}
+  .scn dt{font-family:var(--font-tech);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-faint);padding-top:3px}
+  .scn dd{margin:0;color:var(--text-secondary)}
+  .scn dd.stop{color:var(--warn)}
+
+  .lingo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:var(--gap-sm)}
+  .lingo-grid .bim-card h4{font-family:var(--font-tech);font-size:14px;color:var(--accent);margin-bottom:6px}
+  .lingo-grid .bim-card p{font-size:13px;margin:0}
+
+  @media (max-width: 760px){
+    .scn dl{grid-template-columns:1fr}
+    .skill-table td:first-child{white-space:normal}
+  }
+</style>
+</head>
+<body data-prev="architecture-v2.html" data-next="skills-index.html">
+
+<nav class="bim-topnav">
+  <div class="bim-topnav-left">
+    <a href="../index.html" class="bim-topnav-home">BIM_MCP</a>
+    <span class="bim-topnav-sep">/</span>
+    <a href="../index.html#reference" style="color:var(--text-secondary);border-bottom:none;">reference</a>
+    <span class="bim-topnav-sep">/</span>
+    <span class="bim-topnav-current">Skill 新手手冊</span>
+  </div>
+  <div class="bim-topnav-actions">
+    <a href="https://github.com/shuotao/REVIT_MCP_study" target="_blank" rel="noopener" class="bim-topnav-btn bim-topnav-btn-github" title="View source on GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+    <a href="skills-index.html" class="bim-topnav-btn">Skills 索引 →</a>
+    <a href="troubleshooting.html" class="bim-topnav-btn">Troubleshooting</a>
+  </div>
+</nav>
+
+<header class="bim-hero">
+  <div class="bim-hero-eyebrow">BEGINNER GUIDE <span class="accent">· 61 SKILLS · 不用會寫程式</span></div>
+  <h1 class="bim-hero-title">跟 AI 講人話，<span class="accent">讓 Revit 自己動</span></h1>
+  <p class="bim-hero-sub">這本手冊給<strong>第一次接觸 Revit MCP</strong> 的人。你只需要會開 Revit、會打字。讀完你會知道：Skill 是什麼、開始前要確認哪三件事、怎麼叫出一個 Skill、它跑起來會經過哪些步驟、什麼時候會停下來問你、以及出問題時先看哪裡。</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 270" role="img" aria-label="一句話從你出發：AI 客戶端選中一個 Skill，Skill 讀取 Domain 的方法，依序呼叫工具，透過 WebSocket 連到 Revit 執行">
+      <defs>
+        <marker id="arr1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="arr1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#60a5fa"/></marker>
+      </defs>
+      <!-- 五個主節點 -->
+      <rect class="box" x="20" y="50" width="150" height="64" rx="6"/>
+      <text x="95" y="76" text-anchor="middle" font-weight="700">YOU</text>
+      <text class="zh small" x="95" y="97" text-anchor="middle">你，用中文說需求</text>
+
+      <rect class="box" x="215" y="50" width="150" height="64" rx="6"/>
+      <text x="290" y="76" text-anchor="middle" font-weight="700">AI CLIENT</text>
+      <text class="zh small" x="290" y="97" text-anchor="middle">Claude Code 等</text>
+
+      <rect class="box-acc" x="410" y="50" width="150" height="64" rx="6"/>
+      <text class="t-acc" x="485" y="76" text-anchor="middle" font-weight="700">SKILL</text>
+      <text class="zh small" x="485" y="97" text-anchor="middle">步驟順序・何時停</text>
+
+      <rect class="box" x="605" y="50" width="150" height="64" rx="6"/>
+      <text x="680" y="76" text-anchor="middle" font-weight="700">TOOLS</text>
+      <text class="zh small" x="680" y="97" text-anchor="middle">一支支 MCP 工具</text>
+
+      <rect class="box" x="800" y="50" width="180" height="64" rx="6"/>
+      <text x="890" y="76" text-anchor="middle" font-weight="700">REVIT</text>
+      <text class="zh small" x="890" y="97" text-anchor="middle">add-in 真正改模型</text>
+
+      <!-- 主線箭頭與標籤 -->
+      <line class="line" x1="170" y1="82" x2="213" y2="82" marker-end="url(#arr1)"/>
+      <text class="zh small" x="192" y="40" text-anchor="middle">說人話</text>
+      <line class="line-acc" x1="365" y1="82" x2="408" y2="82" marker-end="url(#arr1a)"/>
+      <text class="zh small t-acc" x="387" y="40" text-anchor="middle">選中一個</text>
+      <line class="line" x1="560" y1="82" x2="603" y2="82" marker-end="url(#arr1)"/>
+      <text class="zh small" x="582" y="40" text-anchor="middle">依序呼叫</text>
+      <line class="line" x1="755" y1="82" x2="798" y2="82" marker-end="url(#arr1)"/>
+      <text class="small" x="777" y="40" text-anchor="middle">ws :8964</text>
+
+      <!-- Domain 在 Skill 下方 -->
+      <rect class="box" x="410" y="180" width="150" height="64" rx="6"/>
+      <text x="485" y="206" text-anchor="middle" font-weight="700">DOMAIN</text>
+      <text class="zh small" x="485" y="227" text-anchor="middle">方法・公式・法規</text>
+      <line class="line dash" x1="485" y1="178" x2="485" y2="116" marker-end="url(#arr1)"/>
+      <text class="zh small" x="575" y="150" text-anchor="start">Skill 先讀這裡，再動手</text>
+
+      <!-- 回報回去 -->
+      <path class="line dash" d="M890 116 L890 250 L95 250 L95 116" marker-end="url(#arr1)"/>
+      <text class="zh small" x="500" y="266" text-anchor="middle">結果回報：做了什麼、跳過什麼、哪些要你決定</text>
+    </svg>
+    <figcaption>整條路只有兩個地方是「人」：最左邊說需求的你，和中途被問「這樣可以嗎？」的你。其餘由 Skill 把方法（Domain）和工具（Tools）串起來。</figcaption>
+  </figure>
+</header>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="what">
+  <div class="bim-section-eyebrow">SECTION 00 · 三分鐘懂</div>
+  <h2 class="bim-section-title">Skill 是什麼？用廚房來比喻</h2>
+  <p class="bim-section-desc">Revit MCP 有三層東西。你不需要全部記住，只要分得出「哪一層在做什麼」：</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 900 330" role="img" aria-label="三層：Skill 決定何時觸發與順序，Domain 提供方法與法規，Tool 真正操作 Revit；對應廚房比喻的食譜、料理知識、廚具">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+      </defs>
+      <!-- 表頭 -->
+      <text class="tiny" x="40" y="22">LAYER</text>
+      <text class="tiny" x="300" y="22">WHAT IT DECIDES</text>
+      <text class="tiny" x="640" y="22">LIKE A KITCHEN</text>
+
+      <!-- Skill -->
+      <rect class="box-acc" x="40" y="36" width="560" height="72" rx="6"/>
+      <text class="t-acc" x="60" y="66" font-weight="700">SKILL</text>
+      <text class="t-acc small" x="60" y="88">61 個</text>
+      <text class="zh" x="300" y="64">何時觸發、先做什麼後做什麼</text>
+      <text class="zh small" x="300" y="88">哪一步要停下來問你</text>
+      <rect class="box-dim" x="640" y="36" width="220" height="72" rx="6"/>
+      <text class="zh" x="750" y="66" text-anchor="middle">食譜</text>
+      <text class="zh small" x="750" y="88" text-anchor="middle">步驟順序、火候、何時試味</text>
+
+      <line class="line dash" x1="320" y1="108" x2="320" y2="134" marker-end="url(#arr2)"/>
+      <text class="zh small" x="332" y="126">引用（不重寫知識）</text>
+
+      <!-- Domain -->
+      <rect class="box" x="40" y="138" width="560" height="72" rx="6"/>
+      <text x="60" y="168" font-weight="700">DOMAIN</text>
+      <text class="small" x="60" y="190">84 份</text>
+      <text class="zh" x="300" y="166">方法、公式、法規條文、扣除規則</text>
+      <text class="zh small" x="300" y="190">人和 AI 共用的 SOP，中文可讀</text>
+      <rect class="box-dim" x="640" y="138" width="220" height="72" rx="6"/>
+      <text class="zh" x="750" y="168" text-anchor="middle">料理知識</text>
+      <text class="zh small" x="750" y="190" text-anchor="middle">為什麼要這樣做、禁忌是什麼</text>
+
+      <line class="line dash" x1="320" y1="210" x2="320" y2="236" marker-end="url(#arr2)"/>
+      <text class="zh small" x="332" y="228">呼叫</text>
+
+      <!-- Tool -->
+      <rect class="box" x="40" y="240" width="560" height="72" rx="6"/>
+      <text x="60" y="270" font-weight="700">TOOL</text>
+      <text class="small" x="60" y="292">215 支</text>
+      <text class="zh" x="300" y="268">真正去查、去改 Revit 模型的那一下</text>
+      <text class="zh small" x="300" y="292">例如 get_active_view、create_sheets</text>
+      <rect class="box-dim" x="640" y="240" width="220" height="72" rx="6"/>
+      <text class="zh" x="750" y="270" text-anchor="middle">廚具</text>
+      <text class="zh small" x="750" y="292" text-anchor="middle">刀、鍋、爐；單獨一支做不了菜</text>
+    </svg>
+    <figcaption>三層：Skill（61・何時觸發）→ Domain（84・方法與法規）→ Tool（215・實際動 Revit）。你對 AI 說的是「我要做什麼菜」，不是「拿哪把刀」。</figcaption>
+  </figure>
+
+  <div class="bim-grid bim-grid-3">
+    <div class="bim-card">
+      <h4>Skill ＝ 食譜</h4>
+      <p>一份 Skill 就是一份寫給 AI 看的作業流程：先查什麼、再做什麼、哪一步要先給你看預覽、什麼情況要停下來。它不含 Revit 知識本身，只負責「編排」。</p>
+    </div>
+    <div class="bim-card">
+      <h4>Domain ＝ 料理知識</h4>
+      <p>法規第幾條、面積怎麼扣、容差多少、哪些例外。Skill 執行前會先讀對應的 Domain 檔。Skill 和 Domain 講法不一致時，<strong>以 Domain 為準</strong>。</p>
+    </div>
+    <div class="bim-card">
+      <h4>Tool ＝ 廚具</h4>
+      <p>一支工具只做一件小事：讀目前視圖、列出樓層、改一個參數、建一張圖紙。你不用背工具名字；需要時 Skill 會挑對的去用。</p>
+    </div>
+  </div>
+
+  <div class="how-tech" style="margin-top:var(--gap-md)">
+    <div class="how-tech-label">一句話</div>
+    <div class="how-tech-content">你不必認識 215 支工具。說出你想完成的事，命中的 Skill 會替你把工具串成一條流程，並且<strong>在改模型之前先把要改的東西列給你看</strong>。</div>
+  </div>
+
+  <h3 style="margin-top:var(--gap-lg)">先認識八個名詞</h3>
+  <div class="lingo-grid">
+    <div class="bim-card"><h4>MCP</h4><p>Model Context Protocol。AI 和外部軟體（這裡是 Revit）溝通的通用插座。你不用懂細節，知道「有它 AI 才碰得到 Revit」就好。</p></div>
+    <div class="bim-card"><h4>Skill</h4><p>一份 <code>SKILL.md</code> 檔，放在專案的 <code>.claude/skills/</code> 底下。AI 讀它來知道「這類需求該怎麼一步步做」。</p></div>
+    <div class="bim-card"><h4>Domain</h4><p>放在 <code>domain/</code> 的 SOP 文件。法規、公式、注意事項都在這裡；人也看得懂。</p></div>
+    <div class="bim-card"><h4>Tool（工具）</h4><p>AI 可以呼叫的最小動作，名字都是小寫加底線，例如 <code>get_all_sheets</code>。</p></div>
+    <div class="bim-card"><h4>Dry-run（預覽）</h4><p>「先算給你看，不真的改」。多數會改模型的 Skill 都有這一步，看完你點頭才寫入。</p></div>
+    <div class="bim-card"><h4>Re-anchor（重新錨定）</h4><p>每次動手前 AI 都要重新問 Revit「現在開的是哪個視圖、哪一層」，不能用上一輪的記憶。</p></div>
+    <div class="bim-card"><h4>Transaction／Undo</h4><p>Skill 改模型都包在 Revit 的交易裡，所以在 Revit 按 Ctrl+Z 可以整批復原。</p></div>
+    <div class="bim-card"><h4>獨佔連線</h4><p>同一時間只有一個 AI 客戶端能連著 Revit。第二個會被拒絕，不會把第一個擠掉。</p></div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="ready">
+  <div class="bim-section-eyebrow">SECTION 01 · 開始之前</div>
+  <h2 class="bim-section-title">三個綠燈：確認完再開口</h2>
+  <p class="bim-section-desc">安裝步驟不在本手冊，請照 <a href="deployment-guide.html">部署指南</a> 或 README 的「三步開始」做完。這一節只講<strong>每次要用之前</strong>要看的三件事。</p>
+
+  <div class="bim-grid bim-grid-3">
+    <div class="bim-card light-card">
+      <div class="light ok"></div>
+      <div>
+        <h4>綠燈 1 · Revit 開著、專案開著</h4>
+        <p>Skill 幾乎都要「目前作用中的視圖」當起點。先把你要處理的專案開起來，切到相關的平面或剖面視圖。</p>
+      </div>
+    </div>
+    <div class="bim-card light-card">
+      <div class="light ok"></div>
+      <div>
+        <h4>綠燈 2 · Revit 功能區的 MCP 服務是綠燈</h4>
+        <p>Revit 上方功能區有一個 MCP 面板。「MCP 服務」按鈕<strong>紅燈＝關、綠燈＝開</strong>。沒開就按一下。旁邊的「AI 客戶端」按鈕可以設定只讓 Claude 或 Codex 連，預設是「不限」。</p>
+      </div>
+    </div>
+    <div class="bim-card light-card">
+      <div class="light ok"></div>
+      <div>
+        <h4>綠燈 3 · AI 客戶端在專案資料夾裡啟動</h4>
+        <p>Skill 是放在這個專案資料夾裡的檔案。Claude Code 要<strong>在這個資料夾打開</strong>，它才看得到 <code>.mcp.json</code> 和 61 個 Skill。在別的資料夾開，就只是一個普通的 AI。</p>
+      </div>
+    </div>
+  </div>
+
+  <figure class="fig">
+    <svg viewBox="0 0 900 230" role="img" aria-label="Revit 功能區 MCP 服務按鈕的三種燈號：紅燈表示服務關閉，綠燈表示服務開啟等待 AI 連入，綠燈加白點表示已有 AI 連線">
+      <!-- 紅 -->
+      <circle cx="150" cy="80" r="30" fill="#ef4444"/>
+      <text class="zh" x="150" y="140" text-anchor="middle" font-weight="700">服務關閉</text>
+      <text class="zh small" x="150" y="162" text-anchor="middle">按一下「MCP 服務」開啟</text>
+      <text class="tiny" x="150" y="30" text-anchor="middle">RED</text>
+      <!-- 綠 -->
+      <circle cx="450" cy="80" r="30" fill="#4ade80"/>
+      <text class="zh" x="450" y="140" text-anchor="middle" font-weight="700">服務開啟・等 AI 連入</text>
+      <text class="zh small" x="450" y="162" text-anchor="middle">去 AI 客戶端問第一個問題</text>
+      <text class="tiny" x="450" y="30" text-anchor="middle">GREEN</text>
+      <!-- 綠 + 白點 -->
+      <circle cx="750" cy="80" r="30" fill="#4ade80"/>
+      <circle cx="750" cy="80" r="8" fill="#fff"/>
+      <text class="zh" x="750" y="140" text-anchor="middle" font-weight="700">AI 已連線</text>
+      <text class="zh small" x="750" y="162" text-anchor="middle">可以開始用 Skill</text>
+      <text class="tiny" x="750" y="30" text-anchor="middle">GREEN + DOT</text>
+      <!-- 箭頭 -->
+      <line class="line-dim" x1="190" y1="80" x2="410" y2="80"/>
+      <line class="line-dim" x1="490" y1="80" x2="710" y2="80"/>
+      <text class="zh tiny" x="300" y="70" text-anchor="middle">按一下按鈕</text>
+      <text class="zh tiny" x="600" y="70" text-anchor="middle">AI 第一次呼叫工具時自動連上</text>
+      <text class="zh small" x="450" y="212" text-anchor="middle">「AI 客戶端」按鈕上會顯示目前連著的是哪一個 AI；「MCP 設定」對話框也看得到。</text>
+    </svg>
+    <figcaption>燈號在 Revit 功能區的 MCP 面板上。AI 客戶端不會在你開服務時馬上連，而是在它第一次呼叫工具時才連上，所以綠燈後要去 AI 那邊發一句話。</figcaption>
+  </figure>
+
+  <h3>怎麼知道真的連上了？問一句最簡單的</h3>
+  <div class="chat">
+    <div class="msg you"><span class="who">你</span>現在 Revit 開的是哪個視圖？</div>
+    <div class="msg ai"><span class="who">AI（示意）</span>我用 <code>get_active_view</code> 查了一下，目前作用中的視圖是 ○○○，類型是樓層平面。</div>
+  </div>
+  <p class="bim-section-desc">AI 有回視圖名稱，代表「AI 客戶端 → MCP Server → Revit」整條路是通的。如果它回「連不上 Revit」或「找不到 Revit 工具」，直接跳到 <a href="#trouble">SECTION 07</a>。</p>
+
+  <div class="pitfalls">
+    <div class="pitfalls-title">新手最常卡的地方</div>
+    <ul>
+      <li>服務開了但 AI 說連不上：多半是另一個 AI 客戶端還連著。Revit 功能區按「切換/釋放連線」，再回來重問一次。</li>
+      <li>AI 說找不到工具：Claude Code 不是在專案資料夾啟動，或 MCP Server 還沒 build。看 <a href="troubleshooting.html">Troubleshooting</a>。</li>
+      <li>本手冊以 <strong>Claude Code</strong>（含 Claude Desktop 的 Code 分頁）為主。Gemini CLI、VS Code Copilot 也能用工具，但不會自動載入這些 Skill。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="trigger">
+  <div class="bim-section-eyebrow">SECTION 02 · 怎麼叫出來</div>
+  <h2 class="bim-section-title">兩種叫法：講人話，或直接點名</h2>
+
+  <figure class="fig">
+    <svg viewBox="0 0 900 250" role="img" aria-label="兩條路到同一個 Skill：講人話會先經過關鍵字比對再命中 Skill；輸入斜線加名字則直接指定 Skill，跳過比對">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="arr3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#60a5fa"/></marker>
+      </defs>
+      <!-- 路 A -->
+      <rect class="box" x="30" y="30" width="250" height="70" rx="6"/>
+      <text x="50" y="56" font-weight="700">A · 講人話</text>
+      <text class="zh small" x="50" y="80">「幫我把 2F 的房間重新編號」</text>
+
+      <rect class="box" x="360" y="30" width="220" height="70" rx="6"/>
+      <text x="380" y="56" font-weight="700">MATCH</text>
+      <text class="zh small" x="380" y="80">比對每個 Skill 的觸發關鍵字</text>
+
+      <line class="line" x1="280" y1="65" x2="358" y2="65" marker-end="url(#arr3)"/>
+      <line class="line" x1="580" y1="65" x2="690" y2="100" marker-end="url(#arr3)"/>
+      <text class="zh small" x="625" y="60" text-anchor="middle">命中</text>
+
+      <!-- 路 B -->
+      <rect class="box" x="30" y="150" width="250" height="70" rx="6"/>
+      <text x="50" y="176" font-weight="700">B · 斜線點名</text>
+      <text class="small" x="50" y="200">/room-numbering 2F</text>
+
+      <line class="line-acc" x1="280" y1="185" x2="690" y2="135" marker-end="url(#arr3a)"/>
+      <text class="zh small t-acc" x="480" y="150" text-anchor="middle">直接指定，不經比對</text>
+
+      <!-- 目標 -->
+      <rect class="box-acc" x="690" y="85" width="180" height="70" rx="6"/>
+      <text class="t-acc" x="780" y="112" text-anchor="middle" font-weight="700">SKILL</text>
+      <text class="small" x="780" y="136" text-anchor="middle">room-numbering</text>
+
+      <text class="zh tiny" x="450" y="240" text-anchor="middle">兩條路到同一個地方。A 比較自然；B 最保險，不怕關鍵字沒對上。</text>
+    </svg>
+    <figcaption>講人話時，AI 拿你的句子去比對每個 Skill 描述裡的觸發關鍵字；斜線點名則跳過比對，直接載入那一份 Skill。</figcaption>
+  </figure>
+
+  <div class="bim-grid bim-grid-2">
+    <div class="bim-card">
+      <h4>方法 A · 講人話（自然語言觸發）</h4>
+      <p>每個 Skill 的描述裡都寫了觸發關鍵字，中英文都有。你說「房間重新編號」「排煙窗檢討」「把這五張圖的植栽隱藏」，AI 會對上相應的 Skill。</p>
+      <p style="font-size:13px;color:var(--text-muted)">說清楚<strong>範圍</strong>（哪個視圖、哪幾層、哪幾張圖紙）和<strong>要不要先預覽</strong>，命中率和結果都會好很多。</p>
+    </div>
+    <div class="bim-card bim-card-accent">
+      <h4>方法 B · 斜線點名（最保險）</h4>
+      <p>在 Claude Code 的輸入框打一個 <code>/</code>，會跳出清單，繼續打幾個字母就能篩到你要的 Skill，例如 <code>/room-numbering</code>、<code>/smoke-exhaust</code>。後面可以直接接你的補充，像 <code>/room-numbering 只做 2F</code>。</p>
+      <p style="font-size:13px;color:var(--text-muted)">已經知道名字、或講人話沒命中時，就用這個。</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:var(--gap-lg)">對照表：你說的話 → 命中的 Skill → 它背後會用的工具</h3>
+  <table>
+    <thead><tr><th>你可以這樣說</th><th>命中的 Skill</th><th>背後主要工具（你不用記）</th></tr></thead>
+    <tbody>
+      <tr><td class="say">幫我把 2F 的房間重新編號</td><td><code>/room-numbering</code></td><td><code>get_rooms_by_level</code> → 預覽 → <code>modify_element_parameter</code></td></tr>
+      <tr><td class="say">找出這個視圖裡厚度大於 200 的牆，上紅色</td><td><code>/element-query</code></td><td><code>get_active_schema</code> → <code>get_category_fields</code> → <code>query_elements_with_filter</code> → <code>override_element_graphics</code></td></tr>
+      <tr><td class="say">A101 到 A105 的視圖都套上「建築平面圖」樣板</td><td><code>/batch-apply-view-template</code></td><td><code>get_view_templates</code> → <code>batch_apply_view_template</code>（先 dryRun）</td></tr>
+      <tr><td class="say">幫我做排煙窗檢討，匯出 Excel</td><td><code>/smoke-exhaust</code></td><td><code>check_floor_effective_openings</code> → <code>check_smoke_exhaust_windows</code> → <code>export_smoke_review_excel</code></td></tr>
+      <tr><td class="say">這五張平面把植栽跟傢俱隱藏</td><td><code>/view-category-visibility</code></td><td><code>get_all_views</code> → <code>set_category_visibility</code></td></tr>
+      <tr><td class="say">照 CAD 的柱圖層建柱，柱號照圖面</td><td><code>/dwg-column-import</code></td><td><code>get_dwg_column_layers</code> → <code>preview_dwg_columns</code> → <code>create_columns_from_dwg</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="pitfalls">
+    <div class="pitfalls-title">兩個長得像、但不是 Skill 的東西</div>
+    <ul>
+      <li><strong>斜線指令（command）</strong>：<code>/qaqc</code>、<code>/domain</code>、<code>/lessons</code>、<code>/review</code>、<code>/status</code>、<code>/handoff</code> 等十個，是給專案維護者用的（跑檢查、把對話整理成 SOP）。新手用不到，看到不用緊張。</li>
+      <li><strong>工具本身</strong>：AI 有時會直接呼叫一支工具就把事情做完（例如只是查目前視圖）。不是每句話都需要經過 Skill；Skill 是給「多步驟、要先預覽」的工作用的。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="lifecycle">
+  <div class="bim-section-eyebrow">SECTION 03 · 跑起來之後</div>
+  <h2 class="bim-section-title">一次 Skill 執行會經過什麼？</h2>
+  <p class="bim-section-desc">不同 Skill 細節不同，但會改模型的 Skill 幾乎都走同一條骨架。看懂這條，你就知道它什麼時候會停下來、為什麼要停。</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 310" role="img" aria-label="Skill 生命週期：觸發、重新錨定健檢、唯讀盤點、產出預覽表、由你確認、在交易內寫入、抽樣驗證、回報；確認不通過時回到盤點重來">
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        <marker id="arr4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#60a5fa"/></marker>
+      </defs>
+      <!-- 節點 1-4 -->
+      <rect class="box" x="20" y="70" width="100" height="56" rx="6"/>
+      <text x="70" y="94" text-anchor="middle">1</text><text class="zh" x="70" y="114" text-anchor="middle">觸發</text>
+      <rect class="box" x="142" y="70" width="100" height="56" rx="6"/>
+      <text x="192" y="94" text-anchor="middle">2</text><text class="zh" x="192" y="114" text-anchor="middle">健檢</text>
+      <rect class="box" x="264" y="70" width="100" height="56" rx="6"/>
+      <text x="314" y="94" text-anchor="middle">3</text><text class="zh" x="314" y="114" text-anchor="middle">盤點</text>
+      <rect class="box" x="386" y="70" width="100" height="56" rx="6"/>
+      <text x="436" y="94" text-anchor="middle">4</text><text class="zh" x="436" y="114" text-anchor="middle">預覽表</text>
+      <!-- 5 菱形：你確認 -->
+      <polygon class="box-acc" points="574,62 630,98 574,134 518,98"/>
+      <text class="t-acc" x="574" y="94" text-anchor="middle">5</text><text class="zh t-acc" x="574" y="112" text-anchor="middle" font-weight="700">你確認</text>
+      <!-- 6-8 -->
+      <rect class="box" x="662" y="70" width="100" height="56" rx="6"/>
+      <text x="712" y="94" text-anchor="middle">6</text><text class="zh" x="712" y="114" text-anchor="middle">寫入</text>
+      <rect class="box" x="784" y="70" width="100" height="56" rx="6"/>
+      <text x="834" y="94" text-anchor="middle">7</text><text class="zh" x="834" y="114" text-anchor="middle">抽查</text>
+      <rect class="box" x="906" y="70" width="80" height="56" rx="6"/>
+      <text x="946" y="94" text-anchor="middle">8</text><text class="zh" x="946" y="114" text-anchor="middle">回報</text>
+
+      <!-- 主線 -->
+      <line class="line" x1="120" y1="98" x2="140" y2="98" marker-end="url(#arr4)"/>
+      <line class="line" x1="242" y1="98" x2="262" y2="98" marker-end="url(#arr4)"/>
+      <line class="line" x1="364" y1="98" x2="384" y2="98" marker-end="url(#arr4)"/>
+      <line class="line" x1="486" y1="98" x2="516" y2="98" marker-end="url(#arr4)"/>
+      <line class="line-acc" x1="630" y1="98" x2="660" y2="98" marker-end="url(#arr4a)"/>
+      <text class="zh small t-acc" x="645" y="60" text-anchor="middle">OK</text>
+      <line class="line" x1="762" y1="98" x2="782" y2="98" marker-end="url(#arr4)"/>
+      <line class="line" x1="884" y1="98" x2="904" y2="98" marker-end="url(#arr4)"/>
+
+      <!-- 不 OK 回到盤點 -->
+      <path class="line dash" d="M574 134 L574 200 L314 200 L314 128" marker-end="url(#arr4)"/>
+      <text class="zh small" x="444" y="194" text-anchor="middle">不對？改條件、重算，不會動到模型</text>
+
+      <!-- 註解 -->
+      <text class="zh tiny" x="192" y="48" text-anchor="middle">重新錨定：目前視圖／樓層</text>
+      <text class="zh tiny" x="314" y="48" text-anchor="middle">只讀不寫</text>
+      <text class="zh tiny" x="436" y="48" text-anchor="middle">舊值 → 新值 ＋ 例外清單</text>
+      <text class="zh tiny" x="712" y="48" text-anchor="middle">Transaction・可 Undo</text>
+      <text class="zh tiny" x="834" y="48" text-anchor="middle">隨機抽幾個比對</text>
+
+      <!-- 底部分區 -->
+      <line class="line-dim dash" x1="20" y1="230" x2="986" y2="230"/>
+      <text class="zh small" x="250" y="258" text-anchor="middle">1–4：唯讀。再怎麼跑都不會改到模型</text>
+      <text class="zh small t-acc" x="574" y="258" text-anchor="middle">5：唯一要你做決定的地方</text>
+      <text class="zh small" x="824" y="258" text-anchor="middle">6–8：寫入、驗證、報告</text>
+      <text class="zh tiny" x="503" y="292" text-anchor="middle">不是每個 Skill 都有全部八步，但「先預覽、等你確認、再寫入」是會改模型的 Skill 的共同骨架。</text>
+    </svg>
+    <figcaption>前四步只讀不寫，所以看到預覽表不滿意可以直接改條件重來。第五步是整條流程裡唯一需要你做決定的地方；第六步起才真的改模型，而且包在交易裡可以 Undo。</figcaption>
+  </figure>
+
+  <h3>用「房間重新編號」走一遍</h3>
+  <ol class="bim-steps">
+    <li><strong>觸發</strong><p>你說「幫我把 2F 的房間重新編號」，或打 <code>/room-numbering</code>。AI 先讀對應的 Domain 檔，拿到排序規則（樓層前綴、由上到下分排、左到右、各層自 01 起編）。</p></li>
+    <li><strong>健檢（重新錨定）</strong><p>AI 查樓層清單、查目前視圖。樓層名字認不出前綴時，它會停下來問你，不會猜。</p></li>
+    <li><strong>盤點</strong><p>逐層抓房間清單和位置。沒圍合、抓不到座標的房間，進「例外清單」，不參與編號。</p></li>
+    <li><strong>預覽表</strong><p>你會看到一張表：樓層｜房間名稱｜舊編號 → 新編號，加上例外清單。<strong>到這裡還沒有任何東西被改。</strong></p></li>
+    <li><strong>你確認</strong><p>順序對嗎？前綴對嗎？不對就說「第三排應該在第二排前面」或「B1F 不要做」，AI 重算再給你一張表。</p></li>
+    <li><strong>寫入</strong><p>你說 OK，AI 才逐間寫入編號。碰到編號互撞會改用兩段式（先寫暫時編號、再寫正式編號）。</p></li>
+    <li><strong>抽查</strong><p>隨機挑幾間回頭讀一次，比對寫進去的值；轉角和不規則隔間會特別看。</p></li>
+    <li><strong>回報</strong><p>成功幾筆、例外幾筆、失敗幾筆，各自是哪些。這些數字都來自工具剛剛的回傳，不是 AI 估的。</p></li>
+  </ol>
+
+  <div class="chat">
+    <div class="msg you"><span class="who">你</span>幫我把 2F 的房間重新編號</div>
+    <div class="msg ai"><span class="who">AI（示意）</span>我先依 <code>domain/room-numbering-workflow.md</code> 的規則盤點了 2F。預覽如下（尚未寫入）：<br>…（表格：房間名稱｜舊編號 → 新編號）…<br>另外有兩間房間未圍合，列為例外不編號。這樣的順序可以嗎？</div>
+    <div class="msg you"><span class="who">你</span>可以，寫入</div>
+    <div class="msg ai"><span class="who">AI（示意）</span>已寫入。抽查了幾間比對正確。成功／例外／失敗各幾筆如下：…</div>
+  </div>
+  <p class="bim-section-desc" style="font-size:13px;color:var(--text-muted)">上面的對話是示意，實際房間名稱、數量以你專案當下工具回傳為準。</p>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="map">
+  <div class="bim-section-eyebrow">SECTION 04 · 地圖</div>
+  <h2 class="bim-section-title">61 個 Skill，我該用哪一個？</h2>
+  <p class="bim-section-desc">先問自己「我想做什麼」，從六大類找；標 <span class="star">★</span> 的是新手最常用、最容易成功的。完整描述與觸發關鍵字請看 <a href="skills-index.html">Skills 索引</a>。</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 300" role="img" aria-label="決策地圖：從「你想做什麼」分成六類：法規檢核、設計協作、文件生產、模型分析、開發運維、進階開發，各列出代表 Skill">
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+      </defs>
+      <rect class="box-acc" x="390" y="16" width="220" height="48" rx="24"/>
+      <text class="zh t-acc" x="500" y="46" text-anchor="middle" font-weight="700">你想做什麼？</text>
+
+      <!-- 六個分支 -->
+      <line class="line" x1="440" y1="64" x2="92" y2="118" marker-end="url(#arr5)"/>
+      <line class="line" x1="470" y1="64" x2="256" y2="118" marker-end="url(#arr5)"/>
+      <line class="line" x1="495" y1="64" x2="420" y2="118" marker-end="url(#arr5)"/>
+      <line class="line" x1="505" y1="64" x2="584" y2="118" marker-end="url(#arr5)"/>
+      <line class="line" x1="530" y1="64" x2="748" y2="118" marker-end="url(#arr5)"/>
+      <line class="line" x1="560" y1="64" x2="912" y2="118" marker-end="url(#arr5)"/>
+
+      <!-- A -->
+      <rect class="box" x="10" y="120" width="156" height="52" rx="6"/>
+      <text x="22" y="140" font-weight="700">A</text><text class="zh" x="40" y="140">法規檢核</text>
+      <text class="zh small" x="22" y="162">合不合規？ · 6 個</text>
+      <text class="small" x="22" y="196">smoke-exhaust</text>
+      <text class="small" x="22" y="216">parking-check</text>
+      <text class="small" x="22" y="236">fire-safety-check</text>
+      <!-- B -->
+      <rect class="box" x="174" y="120" width="156" height="52" rx="6"/>
+      <text x="186" y="140" font-weight="700">B</text><text class="zh" x="204" y="140">設計協作</text>
+      <text class="zh small" x="186" y="162">查、看、上色 · 4 個</text>
+      <text class="small" x="186" y="196">element-query</text>
+      <text class="small" x="186" y="216">element-coloring</text>
+      <text class="small" x="186" y="236">curtain-wall</text>
+      <!-- C -->
+      <rect class="box" x="338" y="120" width="156" height="52" rx="6"/>
+      <text x="350" y="140" font-weight="700">C</text><text class="zh" x="368" y="140">文件生產</text>
+      <text class="zh small" x="350" y="162">圖紙、視圖、標註 · 16 個</text>
+      <text class="small" x="350" y="196">sheet-management</text>
+      <text class="small" x="350" y="216">dependent-view-crop</text>
+      <text class="small" x="350" y="236">auto-dimension</text>
+      <!-- D -->
+      <rect class="box" x="502" y="120" width="156" height="52" rx="6"/>
+      <text x="514" y="140" font-weight="700">D</text><text class="zh" x="532" y="140">模型分析</text>
+      <text class="zh small" x="514" y="162">算量、建模、清整 · 23 個</text>
+      <text class="small" x="514" y="196">room-numbering</text>
+      <text class="small" x="514" y="216">dwg-column-import</text>
+      <text class="small" x="514" y="236">quantity-takeoff-excel</text>
+      <!-- E -->
+      <rect class="box" x="666" y="120" width="156" height="52" rx="6"/>
+      <text x="678" y="140" font-weight="700">E</text><text class="zh" x="696" y="140">開發運維</text>
+      <text class="zh small" x="678" y="162">裝、更新、同步 · 8 個</text>
+      <text class="small" x="678" y="196">build-revit</text>
+      <text class="small" x="678" y="216">deploy-addon</text>
+      <text class="small" x="678" y="236">hj-pr-proposal</text>
+      <!-- F -->
+      <rect class="box" x="830" y="120" width="160" height="52" rx="6"/>
+      <text x="842" y="140" font-weight="700">F</text><text class="zh" x="860" y="140">進階開發</text>
+      <text class="zh small" x="842" y="162">寫工具、畫 SOP · 4 個</text>
+      <text class="small" x="842" y="196">domain-diagram</text>
+      <text class="small" x="842" y="216">dll-to-mcp-tool</text>
+      <text class="small" x="842" y="236">core-reload-dev</text>
+
+      <line class="line-dim dash" x1="10" y1="262" x2="990" y2="262"/>
+      <text class="zh tiny" x="500" y="286" text-anchor="middle">新手先熟 B、C、D 的星號項目；A 類會牽涉法規判讀，建議先讀對應的 Domain 檔再跑。E、F 是維護者與開發者用的。</text>
+    </svg>
+    <figcaption>六大類加起來剛好 61 個。新手從 B（查東西、上色）起手最安全，因為那些 Skill 不改模型、只改顯示。</figcaption>
+  </figure>
+
+  <!-- A -->
+  <div class="cat-head">A · 法規檢核（6 個）· 合不合規？</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/smoke-exhaust</code><span class="star">★</span></td><td>無窗居室判定、排煙有效面積計算、自動上色、Excel 報告</td><td class="say">幫我做排煙窗檢討，匯出 Excel</td></tr>
+      <tr><td><code>/parking-check</code><span class="star">★</span></td><td>車位淨空高度檢查（一般 210cm）與八類車位數量統計</td><td class="say">停車位淨高夠不夠？各類車位各幾個？</td></tr>
+      <tr><td><code>/fire-safety-check</code></td><td>防火時效視覺化、走廊防火分析、外牆開口距離檢討</td><td class="say">檢查這層的防火時效，不合格的上色</td></tr>
+      <tr><td><code>/building-compliance</code></td><td>居室採光比、容積率與樓地板面積、停車位尺寸數量</td><td class="say">檢查居室採光比有沒有符合第 41 條</td></tr>
+      <tr><td><code>/wall-orientation-check</code></td><td>外牆內外面方向是否正確（影響飾面與容積計算）</td><td class="say">幫我檢查外牆有沒有翻面</td></tr>
+      <tr><td><code>/smoke-detector-check</code></td><td>偵煙探測器五項設置規定檢核</td><td class="say">偵煙探測器離牆、離出風口的距離檢核一下</td></tr>
+    </tbody>
+  </table>
+
+  <!-- B -->
+  <div class="cat-head">B · 設計協作（4 個）· 查、看、上色</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/element-query</code><span class="star">★</span></td><td>三階段查詢（探索 → 對齊參數名 → 擷取），可順手上色</td><td class="say">找出這個視圖裡厚度大於 200 的牆</td></tr>
+      <tr><td><code>/element-coloring</code><span class="star">★</span></td><td>依參數值把元素分組上色，看完可一鍵清除</td><td class="say">依防火時效把牆上不同顏色</td></tr>
+      <tr><td><code>/curtain-wall</code></td><td>帷幕牆面板配置，網頁預覽確認後套用</td><td class="say">這片帷幕牆幫我排面板圖樣</td></tr>
+      <tr><td><code>/facade-generation</code></td><td>用參考照片分析生成立面面板，套到牆面</td><td class="say">照這張參考照片幫我做立面面板</td></tr>
+    </tbody>
+  </table>
+
+  <!-- C -->
+  <div class="cat-head">C · 文件生產（16 個）· 圖紙、視圖、標註</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/sheet-management</code><span class="star">★</span></td><td>批次建圖紙、修圖號 -1 衝突、語義化重新排序</td><td class="say">幫我建 A101 到 A110 的圖紙</td></tr>
+      <tr><td><code>/batch-apply-view-template</code><span class="star">★</span></td><td>批次套用視圖樣板，可用圖紙號或視圖名稱選範圍，有 dry-run</td><td class="say">A101 到 A105 的視圖都套上「建築平面圖」樣板</td></tr>
+      <tr><td><code>/auto-dimension</code></td><td>平面視圖自動標尺寸（射線、外框、整批牆三種方法）</td><td class="say">幫這個視圖的牆全部標尺寸</td></tr>
+      <tr><td><code>/dependent-view-crop</code></td><td>依網格線批次建立從屬視圖並設裁剪範圍</td><td class="say">這張平面依網格 A 到 F 切成三張從屬視圖</td></tr>
+      <tr><td><code>/floor-plan-from-template</code></td><td>以一張平面為範本，在多個樓層批次建平面視圖</td><td class="say">照 1F 平面的設定幫 2F 到 10F 都建一張</td></tr>
+      <tr><td><code>/viewport-arrangement</code></td><td>圖紙上放置、排列、跨圖紙移動視埠</td><td class="say">把這些製圖視圖排到圖紙上，兩欄排</td></tr>
+      <tr><td><code>/align-views-on-sheets</code></td><td>批次對齊視圖範圍與圖紙上的視埠位置</td><td class="say">這十張圖的平面位置對齊一致</td></tr>
+      <tr><td><code>/copy-detail-items</code></td><td>把詳圖線、文字、填充區域從一個視圖複製到多個視圖</td><td class="say">把這張圖的文字跟填充區域複製到另外五張</td></tr>
+      <tr><td><code>/dedup-detail-elements</code></td><td>找出並刪除視圖中重複的詳圖元素（會刪東西，先預覽）</td><td class="say">這個視圖有重疊的線跟文字，幫我清掉重複的</td></tr>
+      <tr><td><code>/text-note-batch</code></td><td>跨多個製圖視圖搜尋文字並批次平移</td><td class="say">所有製圖視圖裡的法規附註往下移 5mm</td></tr>
+      <tr><td><code>/scale-drafting-width</code></td><td>製圖視圖表格的寬度與行高獨立縮放</td><td class="say">這張表格太寬，寬度縮成 80%</td></tr>
+      <tr><td><code>/excel-to-legend</code></td><td>Excel 表格匯入製圖視圖，保留合併格、框線、欄寬</td><td class="say">這份 Excel 門窗表匯進 Revit 當圖例</td></tr>
+      <tr><td><code>/copy-sheets-cross-project</code></td><td>跨專案複製含模型視圖的圖紙（Revit 原生做不到）</td><td class="say">把另一個專案的 A 系列圖紙複製過來</td></tr>
+      <tr><td><code>/detail-component-sync</code></td><td>詳圖圖頭編號與圖紙號自動同步</td><td class="say">詳圖圖頭的編號跟圖紙號對不上，幫我同步</td></tr>
+      <tr><td><code>/stair-hidden-line</code></td><td>剖面裡被側板遮住的樓梯梯級補虛線</td><td class="say">剖面裡樓梯被擋住的部分畫虛線</td></tr>
+      <tr><td><code>/wall-section-batch</code></td><td>依牆面套管位置批次建立平行剖面視圖</td><td class="say">每個牆面套管都開一張剖面</td></tr>
+    </tbody>
+  </table>
+
+  <!-- D -->
+  <div class="cat-head">D · 模型分析（23 個）· 算量、建模、清整</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/room-numbering</code><span class="star">★</span></td><td>房間依位置批次重新編號，先預覽後寫入</td><td class="say">2F 的房間重新編號</td></tr>
+      <tr><td><code>/view-category-visibility</code><span class="star">★</span></td><td>批次隱藏或顯示整個類別，連結模型也行</td><td class="say">這五張平面把植栽跟傢俱隱藏</td></tr>
+      <tr><td><code>/quantity-takeoff-excel</code><span class="star">★</span></td><td>可稽核的數量計算 Excel（隔間、踢腳、牆面粉刷、房間表、施工架）</td><td class="say">做一份踢腳板數量表 Excel</td></tr>
+      <tr><td><code>/dwg-column-import</code><span class="star">★</span></td><td>CAD 圖層批次建柱，三種模式，含柱號對應，逐步斷點確認</td><td class="say">照 CAD 的柱圖層建柱，柱號照圖面</td></tr>
+      <tr><td><code>/dwg-beam-import</code></td><td>CAD 圖層批次建梁（大樑、次樑、地樑）</td><td class="say">照這張結構圖的樑圖層建樑</td></tr>
+      <tr><td><code>/detect-clashes</code></td><td>管線與結構碰撞偵測；支援的客戶端會顯示互動檢視器</td><td class="say">跑一下管線跟梁的碰撞</td></tr>
+      <tr><td><code>/partition-takeoff</code></td><td>輕隔間牆數量計算與 CSV 報表（扣門窗）</td><td class="say">算一下 TYPE 牆的面積，扣門窗</td></tr>
+      <tr><td><code>/scaffold-takeoff</code></td><td>室內外施工架數量計算</td><td class="say">外牆施工架周長算一下</td></tr>
+      <tr><td><code>/tall-partition-index</code></td><td>找出高於 6m 的輕隔間牆，產出結構回饋索引圖</td><td class="say">找出超過 6 米的 TYPE 高牆</td></tr>
+      <tr><td><code>/threshold-opening-takeoff</code></td><td>每間房間關聯的門窗數統計（門檻數量用）</td><td class="say">每間房有幾個門幾個窗，統計一下</td></tr>
+      <tr><td><code>/batch-room-height</code></td><td>依房間名稱分組批次調整上限高度</td><td class="say">所有廁所的房間高度設 2400</td></tr>
+      <tr><td><code>/batch-material</code></td><td>批次改材質外觀顏色（複製原材質再改，不動原本的）</td><td class="say">這幾種牆類型的材質顏色改成灰色</td></tr>
+      <tr><td><code>/family-inventory-cleanup</code></td><td>族群盤點：未使用、重複類型，提案後由你裁決再清</td><td class="say">盤點柱族群，沒用到的清掉</td></tr>
+      <tr><td><code>/unjoin-geometry</code></td><td>批次解除幾何接合（做白模常用）</td><td class="say">所有牆跟樓板的接合解除，我要白模</td></tr>
+      <tr><td><code>/finish-schedule-governance</code></td><td>粉刷明細表材料代碼治理：跳號、重排、對照 CSV</td><td class="say">粉刷明細表的材料編號跳號了，幫我重排</td></tr>
+      <tr><td><code>/ifc-structural-sync</code></td><td>把連結 IFC 的梁柱同步成 Revit 原生結構構件</td><td class="say">把連結的 IFC 梁柱轉成 Revit 原生的</td></tr>
+      <tr><td><code>/mep-settings-curation</code></td><td>管徑、風管尺寸目錄盤點與增刪，對照 CNS</td><td class="say">盤點專案的管徑目錄，對 CNS</td></tr>
+      <tr><td><code>/set-project-units</code></td><td>一鍵切換整個專案的顯示單位</td><td class="say">專案單位改成公釐</td></tr>
+      <tr><td><code>/qa-review</code></td><td>圖號一致性、詳圖完整性、視圖組織、參數正確性檢核</td><td class="say">幫這個專案做一次 QA</td></tr>
+      <tr><td><code>/GM_query</code></td><td>查詢模型裡已寫入的綠建材認證資訊</td><td class="say">這個專案用了哪些綠建材？</td></tr>
+      <tr><td><code>/GM_set</code></td><td>比對既有綠建材 Set 與最新 TABC 快照（過期、缺漏）</td><td class="say">檢查綠建材標章有沒有過期</td></tr>
+      <tr><td><code>/GM_import</code></td><td>解析綠建材 Set 對齊請求，產生 Revit 注入計畫</td><td class="say">（綠建材流程第二步，接在 GM_web 之後）</td></tr>
+      <tr><td><code>/GM_inject</code></td><td>把對齊好的綠建材 Set 真正寫入 Revit</td><td class="say">把這組綠建材寫進專案</td></tr>
+    </tbody>
+  </table>
+
+  <!-- E -->
+  <div class="cat-head">E · 開發運維（8 個）· 裝、更新、同步</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/build-revit</code></td><td>編譯 Revit add-in（可一次多個版本）</td><td class="say">幫我 build Revit 2024 的版本</td></tr>
+      <tr><td><code>/deploy-addon</code></td><td>把編好的 DLL 部署到對應版本的 Add-ins 資料夾</td><td class="say">部署到 Revit 2025</td></tr>
+      <tr><td><code>/hj-pr-proposal</code></td><td>把你的 domain／skill 整理成可提交的 PR 草案</td><td class="say">把這份 SOP 整理成 PR 草案</td></tr>
+      <tr><td><code>/GM_update</code></td><td>從 TABC 官網更新綠建材本機資料庫與網頁快取</td><td class="say">更新綠建材資料庫</td></tr>
+      <tr><td><code>/GM_web</code></td><td>開啟綠建材檢索與 Set Manager 網頁</td><td class="say">開綠建材檢索平台</td></tr>
+      <tr><td><code>/GM_kanban</code></td><td>開啟專案看板</td><td class="say">開看板</td></tr>
+      <tr><td><code>/claude-md-sync</code></td><td>CLAUDE.md 與實際檔案雙向同步驗證</td><td class="say">（維護者用）</td></tr>
+      <tr><td><code>/loop-up</code></td><td>多模型分工的自動修正迴圈</td><td class="say">（維護者用）</td></tr>
+    </tbody>
+  </table>
+
+  <!-- F -->
+  <div class="cat-head">F · 進階開發（4 個）· 寫工具、畫 SOP</div>
+  <table class="skill-table">
+    <thead><tr><th>Skill</th><th>做什麼</th><th>你可以這樣說</th></tr></thead>
+    <tbody>
+      <tr><td><code>/domain-diagram</code></td><td>把一份 Domain SOP 畫成流程圖，先做流程健檢</td><td class="say">把這份 domain 畫成流程圖</td></tr>
+      <tr><td><code>/dll-to-mcp-tool</code></td><td>把現成的 Revit 外掛命令（.cs／DLL）封裝成 MCP 工具</td><td class="say">把這個外掛命令包成 MCP 工具</td></tr>
+      <tr><td><code>/core-reload-dev</code></td><td>不重啟 Revit 的熱重載開發迭代（opt-in）</td><td class="say">（開發者用）</td></tr>
+      <tr><td><code>/archicad-skill-adapter</code></td><td>把 Revit 導向的 Skill 轉譯成 Archicad MCP 流程</td><td class="say">（Archicad 使用者）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="scenarios">
+  <div class="bim-section-eyebrow">SECTION 05 · 手把手</div>
+  <h2 class="bim-section-title">新手最常用的八個情境</h2>
+  <p class="bim-section-desc">每個情境列四件事：你怎麼說、它會做什麼、它會在哪裡停下來問你、要注意什麼。都是從該 Skill 的實際流程整理出來的。</p>
+
+  <div class="bim-card scn">
+    <h4>1 · 我想找東西 → <code>/element-query</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「這個視圖裡有哪些牆類型？厚度大於 200 的找出來，上紅色。」</dd>
+      <dt>它做</dt><dd>先探索目前視圖有哪些類別（探索）→ 查該類別的參數名稱，<strong>不猜名字</strong>，因為中英文介面和樣板會不同（對齊）→ 用正確名稱篩選（擷取）→ 需要的話上色。</dd>
+      <dt>停下來</dt><dd class="stop">目標類別在視圖裡不存在、或參數名字對不上時，會先問你。</dd>
+      <dt>注意</dt><dd>長度單位是 mm。這個 Skill 只改顯示（上色），不改模型；看完說「清除上色」就恢復。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>2 · 我想依參數上色 → <code>/element-coloring</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「依防火時效，把這層的牆上不同顏色。」</dd>
+      <dt>它做</dt><dd>先清掉舊的顏色覆寫 → 如果對象是牆，先暫時解除牆接合（不然顏色會黏在一起）→ 查參數值分佈、分組 → 每組套一個顏色 → 恢復牆接合。</dd>
+      <dt>停下來</dt><dd class="stop">配色方案會先跟你討論；參數名稱要先確認。</dd>
+      <dt>注意</dt><dd>平面圖用切割樣式、立面圖用表面樣式。房間（Room）不能直接上色，Skill 會改染房間的邊界牆來代替。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>3 · 房間編號亂掉了 → <code>/room-numbering</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「2F 的房間重新編號。」</dd>
+      <dt>它做</dt><dd>見 <a href="#lifecycle">SECTION 03</a> 的完整走法：健檢樓層前綴 → 盤點 → 排序 → 預覽表 → 你確認 → 寫入 → 抽查。</dd>
+      <dt>停下來</dt><dd class="stop">樓層前綴認不出來時；預覽表給你看時。</dd>
+      <dt>注意</dt><dd>沒圍合的房間會列入例外不編號，報告裡會告訴你是哪幾間。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>4 · 一堆視圖要套同一個樣板 → <code>/batch-apply-view-template</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「A101 到 A105 這五張圖紙上的視圖，都套『建築平面圖』樣板。」</dd>
+      <dt>它做</dt><dd>列出專案裡的視圖樣板跟你對名字 → 用圖紙號、視圖名稱或名稱片段選出目標視圖 → <strong>先 dry-run 列出會被影響的視圖</strong> → 你 OK 才套用。</dd>
+      <dt>停下來</dt><dd class="stop">dry-run 清單給你看時。</dd>
+      <dt>注意</dt><dd>樣板要已經存在於專案裡，Skill 不會幫你建；名稱要完全一致（含中英文、大小寫）。用「名稱包含」選視圖時小心誤選到剖面或明細表，可加視圖類型過濾。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>5 · 視圖太亂，想隱藏整類東西 → <code>/view-category-visibility</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「這五張平面把植栽跟傢俱隱藏。」</dd>
+      <dt>它做</dt><dd>確認目標視圖（目前視圖或依名稱列出多張）→ 對類別名稱（植栽＝Planting、傢俱＝Furniture）→ 逐視圖設定 → 回一張「視圖｜類別｜已隱藏」的表。</dd>
+      <dt>停下來</dt><dd class="stop">視圖名稱比對有歧義時。</dd>
+      <dt>注意</dt><dd>連結模型裡的元素只能整類別隱藏，不能挑單一元素；要挑單一元素請說「隱藏這幾個元素」改走另一支工具。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>6 · 要一次建很多圖紙 → <code>/sheet-management</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「用 A1 圖框幫我建 A101 到 A110，名稱照這個清單。」</dd>
+      <dt>它做</dt><dd>列出可用圖框 → 檢查現有圖號有沒有衝突 → 批次建立。若你是要修圖號衝突（像 -1 後綴），它會用兩段式改名（先暫時名、再最終名）避免互撞。</dd>
+      <dt>停下來</dt><dd class="stop">圖框選哪一個、圖號有衝突時。</dd>
+      <dt>注意</dt><dd>建圖紙會改模型，在 Revit 可以 Undo。重新編號牽涉連鎖位移，先看它列的對照表。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>7 · 排煙窗法規檢討 → <code>/smoke-exhaust</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「幫我做這層的排煙窗檢討，匯出 Excel。」</dd>
+      <dt>它做</dt><dd>先做無開口樓層判定 → 逐間檢查天花板下 80cm 內的可開啟窗面積是否達區劃面積 2% → 自動上色（綠＝合格、黃＝折減後合格、紅＝不合格）→ 匯出 Excel。</dd>
+      <dt>停下來</dt><dd class="stop">天花板高度要從「房間參數」還是「實體天花」讀，它會先問；窗型係數（推射、推開、橫拉、固定）要跟你對。</dd>
+      <dt>注意</dt><dd>這是法規判讀，方法以 <code>domain/smoke-exhaust-review.md</code> 為準。天花還沒建模時用房間參數；畫面和 Excel 必須用同一組設定，否則兩邊數字會不一致。</dd>
+    </dl>
+  </div>
+
+  <div class="bim-card scn">
+    <h4>8 · 照 CAD 圖建柱 → <code>/dwg-column-import</code></h4>
+    <dl>
+      <dt>你說</dt><dd>「照這張 CAD 的柱圖層建柱，柱號沿用圖面上的 C1、C2。」</dd>
+      <dt>它做</dt><dd>掃描 CAD 圖層 → 預覽：幾根柱、尺寸分佈、放樣範圍，<strong>特別是單位健檢</strong> → 跟你選模式（自動建型別／沿用族群尺寸／沿用族群柱號）→ 建柱 → 回報建了幾根、哪些柱號對不上。</dd>
+      <dt>停下來</dt><dd class="stop">兩個硬斷點：單位健檢有警告時絕不往下；模式與族群要你選，不替你預設。</dd>
+      <dt>注意</dt><dd>要在平面視圖執行；CAD 要先匯入或連結；柱輪廓要在獨立圖層。<strong>建柱不會自動復原</strong>，所以每一步都會等你同意。</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="safety">
+  <div class="bim-section-eyebrow">SECTION 06 · 為什麼它不會亂動你的模型</div>
+  <h2 class="bim-section-title">四條守則，加上你自己的三個習慣</h2>
+  <p class="bim-section-desc">這些規則寫在專案的 AI 憲法裡，每個 Skill 都遵守。完整說明見 <a href="three-constitutions.html">四條憲法</a>。</p>
+
+  <div class="bim-grid bim-grid-2">
+    <div class="bim-card">
+      <h4>1 · 連不上就不猜</h4>
+      <p>Revit 沒連上時，AI 只能給一般性建議，不會假裝它看到了你的模型。</p>
+    </div>
+    <div class="bim-card">
+      <h4>2 · 數字都要有來源</h4>
+      <p>回答裡的房間名、ID、面積、數量，都必須來自這一輪工具的回傳。AI 不能用記憶補數字。</p>
+    </div>
+    <div class="bim-card">
+      <h4>3 · 方法照 Domain 走</h4>
+      <p>法規、算量、檢核的公式和扣除規則，以對應的 Domain 檔為準，不用 AI 自己的常識。回答會註明依哪一份。</p>
+    </div>
+    <div class="bim-card">
+      <h4>4 · 每次重新確認現場</h4>
+      <p>目前視圖、樓層、選取都要當下再查一次。上一輪的視圖 ID 不能拿來這一輪用。</p>
+    </div>
+  </div>
+
+  <div class="how-tech" style="margin-top:var(--gap-md)">
+    <div class="how-tech-label">你的三個習慣</div>
+    <div class="how-tech-content checklist">
+      <ul>
+        <li><strong>先存檔。</strong>大批次改模型之前存一次。Skill 的寫入可以 Undo，但多一層保險不花錢。</li>
+        <li><strong>看預覽。</strong>看到預覽表不要秒答 OK。花三十秒掃一眼舊值 → 新值和例外清單，這是流程裡唯一給你的剎車。</li>
+        <li><strong>抽查驗收。</strong>AI 會抽幾個驗證，你也在 Revit 裡點兩三個看。不合預期就 Undo，然後把看到的告訴 AI。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="pitfalls">
+    <div class="pitfalls-title">AI 不會做、你也別要求它做的事</div>
+    <ul>
+      <li>不會手寫封包繞過 MCP 直接戳 Revit。沒有對應工具的事，正確做法是新增工具，不是硬塞。</li>
+      <li>不會在兩個 AI 客戶端同時連著 Revit 的情況下工作。要換 AI，先在 Revit 功能區「切換/釋放連線」。</li>
+      <li>不會替你做法規判斷的最終決定。Skill 給的是依 Domain 算出的結果和依據，簽名的還是你。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="trouble">
+  <div class="bim-section-eyebrow">SECTION 07 · 出問題怎麼辦</div>
+  <h2 class="bim-section-title">三十秒分流：先找斷在哪一段</h2>
+
+  <figure class="fig">
+    <svg viewBox="0 0 1000 210" role="img" aria-label="連線鏈：AI 客戶端、MCP Server、埠 8964、Revit add-in、Revit；四個常見斷點標在對應位置：沒觸發 Skill、找不到工具、連不上、被另一個客戶端佔用">
+      <defs>
+        <marker id="arr7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+      </defs>
+      <rect class="box" x="20" y="70" width="170" height="60" rx="6"/>
+      <text x="105" y="95" text-anchor="middle" font-weight="700">AI CLIENT</text>
+      <text class="zh small" x="105" y="116" text-anchor="middle">Claude Code</text>
+
+      <rect class="box" x="250" y="70" width="170" height="60" rx="6"/>
+      <text x="335" y="95" text-anchor="middle" font-weight="700">MCP SERVER</text>
+      <text class="zh small" x="335" y="116" text-anchor="middle">Node，build/index.js</text>
+
+      <rect class="box" x="580" y="70" width="170" height="60" rx="6"/>
+      <text x="665" y="95" text-anchor="middle" font-weight="700">REVIT ADD-IN</text>
+      <text class="zh small" x="665" y="116" text-anchor="middle">MCP 服務按鈕</text>
+
+      <rect class="box" x="810" y="70" width="170" height="60" rx="6"/>
+      <text x="895" y="95" text-anchor="middle" font-weight="700">REVIT</text>
+      <text class="zh small" x="895" y="116" text-anchor="middle">你的專案</text>
+
+      <line class="line" x1="190" y1="100" x2="248" y2="100" marker-end="url(#arr7)"/>
+      <line class="line" x1="420" y1="100" x2="578" y2="100" marker-end="url(#arr7)"/>
+      <text class="small" x="499" y="92" text-anchor="middle">ws localhost:8964</text>
+      <line class="line" x1="750" y1="100" x2="808" y2="100" marker-end="url(#arr7)"/>
+
+      <!-- 斷點標記 -->
+      <circle cx="105" cy="40" r="13" fill="#fbbf24"/><text x="105" y="44" text-anchor="middle" fill="#000" font-weight="700">1</text>
+      <text class="zh small" x="105" y="160" text-anchor="middle">Skill 沒觸發</text>
+      <circle cx="219" cy="40" r="13" fill="#fbbf24"/><text x="219" y="44" text-anchor="middle" fill="#000" font-weight="700">2</text>
+      <text class="zh small" x="219" y="160" text-anchor="middle">找不到工具</text>
+      <circle cx="499" cy="40" r="13" fill="#fbbf24"/><text x="499" y="44" text-anchor="middle" fill="#000" font-weight="700">3</text>
+      <text class="zh small" x="499" y="160" text-anchor="middle">連不上 / 被佔用</text>
+      <circle cx="779" cy="40" r="13" fill="#fbbf24"/><text x="779" y="44" text-anchor="middle" fill="#000" font-weight="700">4</text>
+      <text class="zh small" x="779" y="160" text-anchor="middle">結果怪怪的</text>
+      <line class="line-dim dash" x1="105" y1="53" x2="105" y2="68"/>
+      <line class="line-dim dash" x1="219" y1="53" x2="219" y2="98"/>
+      <line class="line-dim dash" x1="499" y1="53" x2="499" y2="80"/>
+      <line class="line-dim dash" x1="779" y1="53" x2="779" y2="98"/>
+      <text class="zh tiny" x="500" y="198" text-anchor="middle">從左到右：越左邊的問題越單純。先排除 1、2，再看 3，最後才是 4。</text>
+    </svg>
+    <figcaption>整條路有四個常見斷點。AI 回你的錯誤訊息通常已經指出是哪一段；對照下表處理。</figcaption>
+  </figure>
+
+  <table>
+    <thead><tr><th>#</th><th>你看到的症狀</th><th>最可能的原因</th><th>怎麼處理</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>講了半天，AI 自己亂做、沒照 Skill 的流程</td><td>關鍵字沒對上</td><td>改用斜線點名：<code>/skill-name</code> 加你的需求。</td></tr>
+      <tr><td>2</td><td>AI 說「找不到 Revit 工具」</td><td>Claude Code 不在專案資料夾啟動；MCP Server 沒 build；客戶端沒重啟</td><td>在專案資料夾重開 Claude Code；<code>MCP-Server</code> 跑一次 <code>npm run build</code>；重啟客戶端。</td></tr>
+      <tr><td>3a</td><td>AI 說「連不上 Revit，請按 MCP 服務（開/關）」</td><td>Revit 沒開、服務沒開、或 8964 被佔</td><td>看綠燈 2。埠被卡住時跑 <code>scripts/release-port.ps1</code>。</td></tr>
+      <tr><td>3b</td><td>AI 說「被拒絕，請檢查 AI 客戶端或切換/釋放連線」</td><td>另一個 AI 還連著，或「AI 客戶端」按鈕設成別家</td><td>Revit 功能區按「切換/釋放連線」，或把「AI 客戶端」改回「不限」。</td></tr>
+      <tr><td>4</td><td>跑完了但結果不是你要的</td><td>範圍講得不清楚；參數名或樓層前綴對錯</td><td>Revit 按 Ctrl+Z 復原。把你看到的（哪間、哪張圖、差在哪）講給 AI，重新 dry-run。</td></tr>
+    </tbody>
+  </table>
+
+  <p class="bim-section-desc">更多案例與 log 看哪裡：<a href="troubleshooting.html">Troubleshooting</a>、<a href="https://github.com/shuotao/REVIT_MCP_study/blob/main/docs/troubleshoot-first-install.md" target="_blank" rel="noopener">首次安裝排障</a>。</p>
+</section>
+
+<!-- ============================================ -->
+<section class="bim-section bim-anchor" id="next">
+  <div class="bim-section-eyebrow">SECTION 08 · 下一步</div>
+  <h2 class="bim-section-title">讀完這本，接著看哪裡</h2>
+  <div class="bim-grid bim-grid-3">
+    <a class="bim-card" href="skills-index.html" style="border-bottom:none;color:inherit">
+      <h4>想知道每個 Skill 的完整描述</h4>
+      <p>Skills 索引：每個 Skill 的觸發關鍵字、對應的 Domain 檔。</p>
+    </a>
+    <a class="bim-card" href="domain-index.html" style="border-bottom:none;color:inherit">
+      <h4>想懂它用的方法和法規</h4>
+      <p>Domain 索引：法規條文、公式、扣除規則，人也看得懂。</p>
+    </a>
+    <a class="bim-card" href="tools-index.html" style="border-bottom:none;color:inherit">
+      <h4>想知道工具到底能做什麼</h4>
+      <p>Tools 索引：每支工具一張卡，標示哪些會動到模型。</p>
+    </a>
+    <a class="bim-card" href="architecture-v2.html" style="border-bottom:none;color:inherit">
+      <h4>想懂全貌</h4>
+      <p>三層架構 V2：五分鐘看懂 Skill、Domain、Tool 怎麼分工。</p>
+    </a>
+    <a class="bim-card" href="contributor-template.html" style="border-bottom:none;color:inherit">
+      <h4>想自己寫一個 Skill</h4>
+      <p>Contributor Template：先寫 Domain 再寫 Skill 的順序，以及編寫規範。</p>
+    </a>
+    <a class="bim-card" href="deployment-guide.html#skill-install" style="border-bottom:none;color:inherit">
+      <h4>想把 Skill 一鍵裝到別台電腦</h4>
+      <p>部署指南的「一鍵裝 Skill」：兩行貼進對話框，不用終端機。</p>
+    </a>
+  </div>
+</section>
+
+<footer class="bim-footer">
+  <div class="bim-footer-actions">
+    <a href="skills-index.html" class="bim-footer-btn primary">Skills 索引 →</a>
+    <a href="troubleshooting.html" class="bim-footer-btn">Troubleshooting</a>
+    <a href="../index.html" class="bim-footer-btn">回 BIM_MCP 首頁</a>
+  </div>
+  <p>BIM_MCP · reference / skills-beginner-guide</p>
+  <p style="font-size:11px;color:var(--text-faint);margin-top:6px;">最後更新 2026-10-12 · Skill 分類與一句話描述沿用 Skills 索引；情境流程整理自各 Skill 的 SKILL.md。</p>
+</footer>
+
+<script src="../shared.js"></script>
+<script>initAll();</script>
+</body>
+</html>
