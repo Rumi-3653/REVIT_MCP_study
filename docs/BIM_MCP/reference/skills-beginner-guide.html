@@ -90,25 +90,60 @@
       --ok:#15803d;--ok-bg:#eafbef;--ok-border:#8fe0a8;
       --bad:#b91c1c;--bad-bg:#fdeeee;--bad-border:#f3a2a2;
     }
-    @page{size:A4;margin:14mm 12mm 16mm}
+    @page{size:A4;margin:11mm 10mm 12mm}
     html{scroll-snap-type:none}
-    body{background:#fff;color:var(--text-primary);font-size:12.5px}
-    .bim-topnav,.bim-toc,.bim-context-bar,.bim-progress,.bim-drawer,.bim-drawer-overlay,.bim-footer-preview,.section-drawer-bar,.bim-footer-actions{display:none!important}
-    .bim-footer{display:block!important;border-top:1px solid var(--border);color:var(--text-muted)}
-    .print-only{display:block;font-family:var(--font-tech);font-size:11px;color:var(--text-faint);margin-top:10px}
-    .bim-hero,.bim-section{padding:18px 0;max-width:100%}
-    .bim-section.bim-anchor{min-height:0;scroll-snap-align:none}
-    section.bim-section{break-before:page;page-break-before:always}
-    .fig,.bim-card,.bim-steps li,.scn,.chat .msg,tr,.pitfalls,.how-tech{break-inside:avoid;page-break-inside:avoid}
+    body{background:#fff;color:var(--text-primary);font-size:11.5px;line-height:1.5}
+    .bim-topnav,.bim-toc,.bim-context-bar,.bim-progress,.bim-drawer,.bim-drawer-overlay,.bim-footer-preview,.section-drawer-bar,.bim-footer-actions,.bim-divider{display:none!important}
+    .bim-footer{display:block!important;border-top:1px solid var(--border);color:var(--text-muted);padding:8px 0 0;margin-top:12px}
+    .print-only{display:block;font-family:var(--font-tech);font-size:10px;color:var(--text-faint);margin-top:6px}
+    /* 緊湊：不強制換頁，只避免標題孤行、圖解與表格列被切 */
+    .bim-hero{padding:0 0 8px;max-width:100%}
+    .bim-section,.bim-section.bim-anchor{padding:10px 0!important;min-height:0!important;scroll-snap-align:none;max-width:100%;margin:0}
+    .bim-section+.bim-section{border-top:1px solid var(--border);margin-top:6px}
+    .bim-hero-title{font-size:26px;margin:4px 0 6px;line-height:1.25}
+    .bim-hero-sub{font-size:12px;margin:0}
+    .bim-section-eyebrow{margin:0 0 2px;font-size:9px}
+    .bim-section-title{font-size:19px;margin:0 0 6px;line-height:1.3}
+    .bim-section-desc{margin:0 0 8px;font-size:11.5px}
+    h3{font-size:14px;margin:12px 0 6px}
+    h2,h3,h4,.cat-head,.bim-section-eyebrow,.bim-section-desc,.pitfalls-title{break-after:avoid;page-break-after:avoid}
+    .fig,.bim-steps li,tr,.chat .msg,.bim-card,.pitfalls{break-inside:avoid;page-break-inside:avoid}
+    .scn,.how-tech,.lingo-grid,.bim-grid{break-inside:auto;page-break-inside:auto}
     thead{display:table-header-group}
-    h2,h3,.cat-head{break-after:avoid;page-break-after:avoid}
-    .bim-steps li:before{color:#fff}
-    .fig{background:#fff}
+    .fig{background:#fff;padding:8px 10px 6px;margin:8px 0}
     .fig svg{color:#111}
+    .fig figcaption{font-size:10.5px;margin-top:4px;line-height:1.45}
+    .bim-grid{gap:8px!important;margin:6px 0}
+    .bim-grid-3{grid-template-columns:repeat(3,1fr)!important}
+    .bim-grid-2{grid-template-columns:repeat(2,1fr)!important}
+    .lingo-grid{grid-template-columns:repeat(4,1fr)!important;gap:8px}
+    .bim-card{padding:10px 12px!important;margin:0!important}
+    .bim-card h4{font-size:12.5px;margin:0 0 4px}
+    .bim-card p{font-size:11px;margin:0 0 4px;line-height:1.45}
+    .lingo-grid .bim-card p{font-size:10.5px}
+    .light-card{gap:8px;grid-template-columns:22px 1fr}
+    .light{width:16px;height:16px;margin-top:2px}
+    .bim-steps{margin:4px 0}
+    .bim-steps li{padding:8px 12px 8px 44px;margin:0 0 6px}
+    .bim-steps li:before{width:22px;height:22px;left:12px;top:8px;font-size:11px;color:#fff}
+    .bim-steps li p{font-size:11px;margin:3px 0 0;line-height:1.45}
+    .chat{gap:6px;margin:6px 0}
+    .chat .msg{padding:7px 10px;font-size:11px;line-height:1.45;max-width:92%}
+    .scn{margin-bottom:8px}
+    .scn h4{font-size:12.5px;margin:0 0 6px}
+    .scn dl{grid-template-columns:62px 1fr;gap:3px 10px;font-size:11px;line-height:1.45}
+    .scn dt{font-size:9.5px;padding-top:2px}
+    .pitfalls,.how-tech{padding:8px 12px!important;margin:8px 0!important}
+    .pitfalls ul,.how-tech ul{margin:4px 0 0;padding-left:16px}
+    .pitfalls li,.how-tech li{font-size:11px;margin:2px 0;line-height:1.45}
+    .how-tech{background:var(--accent-bg)!important;border:1px solid var(--accent-border)!important;color:var(--text-primary)!important;grid-template-columns:70px 1fr}
+    .how-tech-label{color:var(--accent)!important;font-size:9.5px}
+    .how-tech-content,.how-tech-content *{color:var(--text-primary)!important;font-size:11px}
+    table{margin:4px 0 8px;font-size:11px}
+    th,td{padding:4px 7px!important;line-height:1.4}
+    .skill-table code,td code{font-size:10px}
+    .cat-head{margin:12px 0 2px!important;padding-bottom:3px;font-size:10px}
     a{color:var(--accent);text-decoration:none}
-    .how-tech{background:var(--accent-bg)!important;border:1px solid var(--accent-border)!important;color:var(--text-primary)!important}
-    .how-tech-label{color:var(--accent)!important}
-    .how-tech-content,.how-tech-content *{color:var(--text-primary)!important}
   }
 </style>
 </head>
