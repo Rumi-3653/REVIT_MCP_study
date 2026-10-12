@@ -77,6 +77,39 @@
     .scn dl{grid-template-columns:1fr}
     .skill-table td:first-child{white-space:normal}
   }
+
+  /* ---- 列印 / PDF（Ctrl+P 或無頭瀏覽器 print-to-pdf 皆適用）---- */
+  .print-only{display:none}
+  @media print{
+    :root{
+      --bg:#fff;--bg-elevated:#fafbfc;--bg-card:#f5f7fa;--bg-card-hover:#f5f7fa;
+      --border:#d7dce3;--border-strong:#aeb6c2;
+      --text-primary:#111;--text-secondary:#2f3640;--text-muted:#5b6470;--text-faint:#8a93a0;
+      --accent:#1d4ed8;--accent-bg:#e8effd;--accent-bg-strong:#d4e1fb;--accent-border:#8fb0f3;
+      --warn:#a35b00;--warn-bg:#fff6e5;--warn-border:#f1c27a;
+      --ok:#15803d;--ok-bg:#eafbef;--ok-border:#8fe0a8;
+      --bad:#b91c1c;--bad-bg:#fdeeee;--bad-border:#f3a2a2;
+    }
+    @page{size:A4;margin:14mm 12mm 16mm}
+    html{scroll-snap-type:none}
+    body{background:#fff;color:var(--text-primary);font-size:12.5px}
+    .bim-topnav,.bim-toc,.bim-context-bar,.bim-progress,.bim-drawer,.bim-drawer-overlay,.bim-footer-preview,.section-drawer-bar,.bim-footer-actions{display:none!important}
+    .bim-footer{display:block!important;border-top:1px solid var(--border);color:var(--text-muted)}
+    .print-only{display:block;font-family:var(--font-tech);font-size:11px;color:var(--text-faint);margin-top:10px}
+    .bim-hero,.bim-section{padding:18px 0;max-width:100%}
+    .bim-section.bim-anchor{min-height:0;scroll-snap-align:none}
+    section.bim-section{break-before:page;page-break-before:always}
+    .fig,.bim-card,.bim-steps li,.scn,.chat .msg,tr,.pitfalls,.how-tech{break-inside:avoid;page-break-inside:avoid}
+    thead{display:table-header-group}
+    h2,h3,.cat-head{break-after:avoid;page-break-after:avoid}
+    .bim-steps li:before{color:#fff}
+    .fig{background:#fff}
+    .fig svg{color:#111}
+    a{color:var(--accent);text-decoration:none}
+    .how-tech{background:var(--accent-bg)!important;border:1px solid var(--accent-border)!important;color:var(--text-primary)!important}
+    .how-tech-label{color:var(--accent)!important}
+    .how-tech-content,.how-tech-content *{color:var(--text-primary)!important}
+  }
 </style>
 </head>
 <body data-prev="architecture-v2.html" data-next="skills-index.html">
@@ -100,6 +133,7 @@
   <div class="bim-hero-eyebrow">BEGINNER GUIDE <span class="accent">· 61 SKILLS · 不用會寫程式</span></div>
   <h1 class="bim-hero-title">跟 AI 講人話，<span class="accent">讓 Revit 自己動</span></h1>
   <p class="bim-hero-sub">這本手冊給<strong>第一次接觸 Revit MCP</strong> 的人。你只需要會開 Revit、會打字。讀完你會知道：Skill 是什麼、開始前要確認哪三件事、怎麼叫出一個 Skill、它跑起來會經過哪些步驟、什麼時候會停下來問你、以及出問題時先看哪裡。</p>
+  <p class="print-only">列印版 · 原文 docs/BIM_MCP/reference/skills-beginner-guide.html · 線上版隨專案更新，本 PDF 為 2026-10-12 快照</p>
 
   <figure class="fig">
     <svg viewBox="0 0 1000 270" role="img" aria-label="一句話從你出發：AI 客戶端選中一個 Skill，Skill 讀取 Domain 的方法，依序呼叫工具，透過 WebSocket 連到 Revit 執行">
