@@ -3,6 +3,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Core;
+using RevitMCP.Configuration;
 
 namespace RevitMCP.Commands
 {
@@ -41,7 +42,9 @@ namespace RevitMCP.Commands
                         "（連上後可在「MCP 設定」查看目前佔用連線的客戶端）");
                 }
 
+                Application.RequestToggleButtonIconRefresh();
                 RibbonStatus.Refresh();
+
                 return Result.Succeeded;
             }
             catch (Exception ex)

@@ -1,6 +1,9 @@
 ---
 name: smoke-detector-check
-description: 消防偵煙探測器設置法規檢討：依消防法施行細則附表五執行五項檢核（距出風口≥1500mm、距牆樑≥600mm、距天花板≤600mm、樑區格涵蓋、探測面積上限），並在 Revit 圖面以顏色標示結果。觸發：檢查偵煙探測器、偵煙設置檢討、探測器有沒有違規、smoke detector check。
+description: "消防偵煙探測器設置法規檢討：出風口距離、壁樑距、天花板貼附、區格涵蓋、探測面積五項規定檢核並於 Revit 圖面上色標示。觸發條件：使用者提到偵煙探測器、偵煙設置、探測器違規、smoke detector check、消防探測器。工具：analyze_smoke_detectors、visualize_detector_results、get_active_view。"
+metadata:
+  references:
+    - domain/smoke-detector-check.md
 ---
 
 # 消防偵煙探測器設置法規檢討
@@ -37,7 +40,7 @@ description: 消防偵煙探測器設置法規檢討：依消防法施行細則�
 
    出風口資料缺失時，條件 1 標為 WARN 而非 FAIL。
 
-4. **視覺化** — 將判定結果（每筆含 `DetectorId`、`IsOk`、`IsWarn`）傳給 `visualize_detector_results` 上色：綠=PASS、紅=FAIL、橙=WARN。
+4. **視覺化** — 將判定結果以 `results` 陣列（每筆含 `DetectorId`、`IsOk`，可選 `IsWarn`、`Message`）傳給 `visualize_detector_results` 上色：綠=PASS、紅=FAIL、橙=WARN。
 
 5. **回報** — 輸出 PASS / FAIL / WARN 數量摘要與逐項違規清單，引用 `domain/smoke-detector-check.md` 的條號，並提醒使用者查看 Revit 中的顏色標示。
 

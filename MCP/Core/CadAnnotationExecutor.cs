@@ -28,10 +28,14 @@ namespace RevitMCP.Core
         // ────────────────────────────────────────────────
 
         public static object PreviewCommentsFromCad(Document doc, JObject p)
-            => Run(doc, p, apply: false);
+        {
+            return Run(doc, p, apply: false);
+        }
 
         public static object BackfillCommentsFromCad(Document doc, JObject p)
-            => Run(doc, p, apply: true);
+        {
+            return Run(doc, p, apply: true);
+        }
 
         // ────────────────────────────────────────────────
         // 主流程：讀文字 → 撈元件 → 單位偵測 → 配對 →（apply 時）寫入
